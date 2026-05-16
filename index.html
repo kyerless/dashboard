@@ -930,7 +930,7 @@ async function loadTasks() {
     renderTasks();
     const n = tasks.length;
     setStatus('ok', `${n} task${n !== 1 ? 's' : ''}`);
-    document.getElementById('task-count').textContent = n ? `${n} remaining` : '';
+    
   } catch (e) {
     setStatus('err', 'Sync failed');
     renderTasksError();
@@ -947,15 +947,23 @@ async function addTask() {
   if (!content || !TOKEN) return;
   input.value = '';
   input.focus();
-  setStatus('loading', 'Adding...');
+
+  const tempId   = 'tmp-' + Date.now();
+  const tempTask = { id: tempId, content };
+  tasks.unshift(tempTask);
+  renderTasks();
+  const n = tasks.length;
+  setStatus('ok', `${n} task${n !== 1 ? 's' : ''}`);
+   
+
   try {
-    const task = await apiCall('/tasks', 'POST', { content });
-    tasks.unshift(task);
+    const real = await apiCall('/tasks', 'POST', { content });
+    const idx  = tasks.findIndex(t => t.id === tempId);
+    if (idx !== -1) tasks[idx] = real;
     renderTasks();
-    const n = tasks.length;
-    setStatus('ok', `${n} task${n !== 1 ? 's' : ''}`);
-    document.getElementById('task-count').textContent = `${n} remaining`;
   } catch (e) {
+    tasks = tasks.filter(t => t.id !== tempId);
+    renderTasks();
     setStatus('err', 'Failed to add');
     console.error('[addTask]', e);
   }
@@ -965,23 +973,24 @@ async function addTask() {
 // Complete task
 // ─────────────────────────────────────────────
 async function completeTask(id) {
-  const item  = document.querySelector(`.task-item[data-id="${id}"]`);
-  const check = item && item.querySelector('.task-check');
+  const item     = document.querySelector(`.task-item[data-id="${id}"]`);
+  const check    = item && item.querySelector('.task-check');
+  const snapshot = [...tasks];
   if (check) { check.classList.add('done'); check.textContent = '✓'; }
   if (item)  { setTimeout(() => item.classList.add('completing'), 10); }
+  tasks = tasks.filter(t => t.id !== id);
+  setTimeout(() => {
+    renderTasks();
+    const n = tasks.length;
+    setStatus('ok', `${n} task${n !== 1 ? 's' : ''}`);
+     
+  }, 300);
   try {
     await apiCall(`/tasks/${id}/close`, 'POST');
-    tasks = tasks.filter(t => t.id !== id);
-    setTimeout(() => {
-      renderTasks();
-      const n = tasks.length;
-      setStatus('ok', `${n} task${n !== 1 ? 's' : ''}`);
-      document.getElementById('task-count').textContent = n ? `${n} remaining` : '';
-    }, 340);
   } catch (e) {
+    tasks = snapshot;
+    renderTasks();
     setStatus('err', 'Failed to complete');
-    if (check) { check.classList.remove('done'); check.textContent = ''; }
-    if (item)  { item.classList.remove('completing'); }
     console.error('[completeTask]', e);
   }
 }
@@ -990,20 +999,22 @@ async function completeTask(id) {
 // Delete task
 // ─────────────────────────────────────────────
 async function deleteTask(id) {
-  const item = document.querySelector(`.task-item[data-id="${id}"]`);
+  const item     = document.querySelector(`.task-item[data-id="${id}"]`);
+  const snapshot = [...tasks];
   if (item) item.classList.add('completing');
+  tasks = tasks.filter(t => t.id !== id);
+  setTimeout(() => {
+    renderTasks();
+    const n = tasks.length;
+    setStatus('ok', `${n} task${n !== 1 ? 's' : ''}`);
+     
+  }, 260);
   try {
     await apiCall(`/tasks/${id}`, 'DELETE');
-    tasks = tasks.filter(t => t.id !== id);
-    setTimeout(() => {
-      renderTasks();
-      const n = tasks.length;
-      setStatus('ok', `${n} task${n !== 1 ? 's' : ''}`);
-      document.getElementById('task-count').textContent = n ? `${n} remaining` : '';
-    }, 280);
   } catch (e) {
+    tasks = snapshot;
+    renderTasks();
     setStatus('err', 'Failed to delete');
-    if (item) item.classList.remove('completing');
     console.error('[deleteTask]', e);
   }
 }
@@ -1191,7 +1202,7 @@ function disconnectTodoist() {
   tasks = [];
   renderTasks();
   setStatus('', '—');
-  document.getElementById('task-count').textContent = '';
+   
   closeSettings();
   show('setup-screen');
 }
