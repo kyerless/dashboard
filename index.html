@@ -16,9 +16,9 @@
   --glass-border: rgba(255, 255, 255, 0.10);
   --accent:       #f0a500;
   --accent-dim:   rgba(240, 165, 0, 0.12);
-  --accent-2:     #b87aee;
-  --text:         #ede8f5;
-  --muted:        #6a6080;
+  --accent-2:     #a0a0a0;
+  --text:         #e8e8e8;
+  --muted:        #666666;
   --danger:       #e05c7a;
   --success:      #5ce0a0;
   --radius:       14px;
@@ -50,7 +50,7 @@ html, body {
 #bg-gif.active { opacity: 1; }
 #bg-overlay {
   position: fixed; inset: 0; z-index: 2;
-  background: rgba(6, 3, 18, 0.95);
+  background: rgba(0, 0, 0, 0.35);
 }
 #grain {
   position: fixed; inset: 0; z-index: 3;
@@ -310,6 +310,19 @@ html, body {
   to   { opacity: 0; transform: scale(0.95); }
 }
 .task-item.completing { animation: taskFadeOut 0.3s ease forwards; }
+.task-item.task-done {
+  opacity: 0.38;
+}
+.task-item.task-done .task-content {
+  text-decoration: line-through;
+}
+.task-item.task-done .task-check {
+  border-color: var(--success);
+  background: var(--success);
+  color: #111111;
+  cursor: default;
+  pointer-events: none;
+}
 
 .task-check {
   width: 17px; height: 17px;
@@ -986,18 +999,11 @@ async function addTask() {
 // Complete task
 // ─────────────────────────────────────────────
 async function completeTask(id) {
-  const item     = document.querySelector(`.task-item[data-id="${id}"]`);
-  const check    = item && item.querySelector('.task-check');
   const snapshot = [...tasks];
-  if (check) { check.classList.add('done'); check.textContent = '✓'; }
-  if (item)  { setTimeout(() => item.classList.add('completing'), 10); }
-  tasks = tasks.filter(t => t.id !== id);
-  setTimeout(() => {
-    renderTasks();
-    const n = tasks.length;
-    setStatus('ok', `${n} task${n !== 1 ? 's' : ''}`);
-     
-  }, 300);
+  const idx      = tasks.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  tasks[idx] = { ...tasks[idx], _done: true };
+  renderTasks();
   try {
     await apiCall(`/tasks/${id}/close`, 'POST');
   } catch (e) {
@@ -1109,13 +1115,16 @@ function renderTasks() {
       </div>`;
     return;
   }
-  list.innerHTML = tasks.map((t, i) => `
-    <div class="task-item" data-id="${t.id}" draggable="true">
-      <div class="task-check" onclick="completeTask('${t.id}')" title="Mark complete"></div>
-      <div class="task-content" ondblclick="editTask('${t.id}')" title="Double-click to edit">${escHtml(t.content)}</div>
+  const active = tasks.filter(t => !t._done);
+  const done   = tasks.filter(t =>  t._done);
+  const sorted = [...active, ...done];
+  list.innerHTML = sorted.map((t, i) => `
+    <div class="task-item${t._done ? ' task-done' : ''}" data-id="${t.id}" draggable="${!t._done}">
+      <div class="task-check${t._done ? ' done' : ''}" onclick="${t._done ? '' : `completeTask('${t.id}')`}" title="${t._done ? 'Completed' : 'Mark complete'}">${t._done ? '✓' : ''}</div>
+      <div class="task-content" ondblclick="${t._done ? '' : `editTask('${t.id}')`}" title="${t._done ? '' : 'Double-click to edit'}">${escHtml(t.content)}</div>
       <button class="task-del" onclick="deleteTask('${t.id}')" title="Delete task">✕</button>
     </div>
-    ${i < tasks.length - 1 ? '<div class="task-sep"></div>' : ''}
+    ${i < sorted.length - 1 ? '<div class="task-sep"></div>' : ''}
   `).join('');
 
   let dragSrc = null;
