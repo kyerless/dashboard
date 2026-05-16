@@ -759,7 +759,8 @@ async function loadTasks() {
   if (!TOKEN) return;
   setStatus('loading', 'Syncing...');
   try {
-    tasks = await apiCall('/tasks');
+    const data = await apiCall('/tasks');
+    tasks = Array.isArray(data) ? data : (data.results ?? []);
     tasks.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     renderTasks();
     const n = tasks.length;
