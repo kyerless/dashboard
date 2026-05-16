@@ -336,10 +336,23 @@ html, body {
 
 .task-content {
   flex: 1;
-  font-size: 18px;
+  font-size: 15px;
   line-height: 1.55;
   color: var(--text);
   word-break: break-word;
+  cursor: text;
+}
+.task-edit-input {
+  flex: 1;
+  background: var(--glass-light);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  color: var(--text);
+  font-family: 'Kumbh Sans', sans-serif;
+  font-size: 15px;
+  outline: none;
+  width: 100%;
 }
 
 .task-del {
@@ -1048,6 +1061,42 @@ async function syncReorder() {
 }
   
 // ─────────────────────────────────────────────
+// Edit task
+// ─────────────────────────────────────────────
+function editTask(id) {
+  const item    = document.querySelector(`.task-item[data-id="${id}"]`);
+  const content = item && item.querySelector('.task-content');
+  if (!content || item.querySelector('.task-edit-input')) return;
+  const current = content.textContent;
+  content.innerHTML = `<input class="task-edit-input" value="${escHtml(current)}" />`;
+  const input = content.querySelector('.task-edit-input');
+  input.focus();
+  input.select();
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { e.preventDefault(); saveEdit(id, input.value.trim()); }
+    if (e.key === 'Escape') { renderTasks(); }
+  });
+  input.addEventListener('blur', () => saveEdit(id, input.value.trim()));
+}
+
+async function saveEdit(id, newContent) {
+  if (!newContent) { renderTasks(); return; }
+  const snapshot = [...tasks];
+  const idx      = tasks.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  tasks[idx] = { ...tasks[idx], content: newContent };
+  renderTasks();
+  try {
+    await apiCall(`/tasks/${id}`, 'POST', { content: newContent });
+  } catch (e) {
+    tasks = snapshot;
+    renderTasks();
+    setStatus('err', 'Failed to save');
+    console.error('[saveEdit]', e);
+  }
+}
+
+// ─────────────────────────────────────────────
 // Render tasks
 // ─────────────────────────────────────────────
 function renderTasks() {
@@ -1063,7 +1112,7 @@ function renderTasks() {
   list.innerHTML = tasks.map((t, i) => `
     <div class="task-item" data-id="${t.id}" draggable="true">
       <div class="task-check" onclick="completeTask('${t.id}')" title="Mark complete"></div>
-      <div class="task-content">${escHtml(t.content)}</div>
+      <div class="task-content" ondblclick="editTask('${t.id}')" title="Double-click to edit">${escHtml(t.content)}</div>
       <button class="task-del" onclick="deleteTask('${t.id}')" title="Delete task">✕</button>
     </div>
     ${i < tasks.length - 1 ? '<div class="task-sep"></div>' : ''}
