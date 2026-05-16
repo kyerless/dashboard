@@ -239,7 +239,23 @@ html, body {
   padding: 0;
   line-height: 1;
 }
-.shortcut-tile:hover .shortcut-del { display: flex; }
+.shortcut-edit {
+  position: absolute;
+  top: 4px; left: 4px;
+  width: 15px; height: 15px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+.shortcut-tile:hover .shortcut-edit { display: flex; }
 
 .add-shortcut-btn {
   width: 100%;
@@ -685,7 +701,7 @@ html, body {
 <!-- ── Add Shortcut Modal ── -->
 <div class="modal-bg hidden" id="shortcut-modal">
   <div class="modal">
-    <h2>+ Add Shortcut</h2>
+    <h2 id="sc-modal-title">+ Add Shortcut</h2>
     <div class="form-group">
       <label>Emoji / Icon</label>
       <input class="form-input" id="sc-emoji" type="text" placeholder="🔗" maxlength="4" style="font-size:24px;" />
@@ -704,7 +720,7 @@ html, body {
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeShortcutModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveShortcut()">Add Shortcut</button>
+      <button class="btn btn-primary" id="sc-save-btn" onclick="saveShortcut()">Add Shortcut</button>
     </div>
   </div>
 </div>
@@ -728,7 +744,8 @@ const LS_KEYS = {
 // ─────────────────────────────────────────────
 let TOKEN     = localStorage.getItem(LS_KEYS.TOKEN) || '';
 let tasks     = [];
-let shortcuts = JSON.parse(localStorage.getItem(LS_KEYS.SHORTCUTS) || '[]');
+let shortcuts          = JSON.parse(localStorage.getItem(LS_KEYS.SHORTCUTS) || '[]');
+let editingShortcutIdx = null;
 
 // ─────────────────────────────────────────────
 // Window Manager
@@ -1217,7 +1234,8 @@ function renderShortcuts() {
         : `<span class="shortcut-emoji">${escHtml(s.emoji || '🔗')}</span>`
       }
       <span class="shortcut-label">${escHtml(s.label)}</span>
-      <button class="shortcut-del" onclick="removeShortcut(event, ${i})" title="Remove">✕</button>
+      <button class="shortcut-edit" onclick="openEditShortcutModal(event, ${i})" title="Edit">✎</button>
+      <button class="shortcut-del"  onclick="removeShortcut(event, ${i})"        title="Remove">✕</button>
     </a>
   `).join('');
 }
@@ -1235,13 +1253,29 @@ function persistShortcuts() {
 }
 
 function openShortcutModal() {
+  editingShortcutIdx = null;
+  document.getElementById('sc-modal-title').textContent = '+ Add Shortcut';
+  document.getElementById('sc-save-btn').textContent    = 'Add Shortcut';
   document.getElementById('sc-emoji').value = '';
   document.getElementById('sc-img').value   = '';
   document.getElementById('sc-label').value = '';
   document.getElementById('sc-url').value   = '';
   show('shortcut-modal');
 }
-
+function openEditShortcutModal(e, i) {
+  e.preventDefault();
+  e.stopPropagation();
+  const s = shortcuts[i];
+  editingShortcutIdx = i;
+  document.getElementById('sc-modal-title').textContent = '✎ Edit Shortcut';
+  document.getElementById('sc-save-btn').textContent    = 'Save Changes';
+  document.getElementById('sc-emoji').value = s.emoji || '🔗';
+  document.getElementById('sc-img').value   = s.img   || '';
+  document.getElementById('sc-label').value = s.label || '';
+  document.getElementById('sc-url').value   = s.url   || '';
+  show('shortcut-modal');
+}
+  
 function closeShortcutModal() { hide('shortcut-modal'); }
 
 function saveShortcut() {
@@ -1250,7 +1284,12 @@ function saveShortcut() {
   const label = document.getElementById('sc-label').value.trim();
   const url   = document.getElementById('sc-url').value.trim();
   if (!label || !url) { alert('Label and URL are required.'); return; }
-  shortcuts.push({ emoji, img, label, url });
+  if (editingShortcutIdx !== null) {
+    shortcuts[editingShortcutIdx] = { emoji, img, label, url };
+    editingShortcutIdx = null;
+  } else {
+    shortcuts.push({ emoji, img, label, url });
+  }
   persistShortcuts();
   renderShortcuts();
   closeShortcutModal();
