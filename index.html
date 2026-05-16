@@ -735,11 +735,11 @@ function setStatus(state, text) {
 // Todoist API helpers
 // ─────────────────────────────────────────────
 async function apiCall(path, method = 'GET', body = null) {
-  const targetUrl = TODOIST_BASE + path;
+  const targetUrl = TODOIST_BASE + path + '?token=' + encodeURIComponent(TOKEN);
   const proxyUrl  = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
   const opts = {
     method,
-    headers: { 'Authorization': `Bearer ${TOKEN}` },
+    headers: {},
   };
   if (body) {
     opts.headers['Content-Type'] = 'application/json';
