@@ -655,7 +655,7 @@ html, body {
 // ─────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────
-const API_BASE = 'https://api.todoist.com/rest/v2';
+const TODOIST_BASE = 'https://api.todoist.com/rest/v2';
 
 const LS_KEYS = {
   TOKEN:     'dash_token',
@@ -735,6 +735,8 @@ function setStatus(state, text) {
 // Todoist API helpers
 // ─────────────────────────────────────────────
 async function apiCall(path, method = 'GET', body = null) {
+  const targetUrl = TODOIST_BASE + path;
+  const proxyUrl  = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
   const opts = {
     method,
     headers: { 'Authorization': `Bearer ${TOKEN}` },
@@ -743,7 +745,7 @@ async function apiCall(path, method = 'GET', body = null) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
   }
-  const res = await fetch(`${API_BASE}${path}`, opts);
+  const res = await fetch(proxyUrl, opts);
   if (!res.ok) {
     const msg = await res.text().catch(() => res.status);
     throw new Error(`${res.status}: ${msg}`);
