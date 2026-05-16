@@ -655,7 +655,7 @@ html, body {
 // ─────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────
-const API_BASE = 'https://api.allorigins.win/get?url=' + encodeURIComponent('https://api.todoist.com/rest/v2');
+const API_BASE = 'https://api.todoist.com/rest/v2';
 
 const LS_KEYS = {
   TOKEN:     'dash_token',
@@ -749,8 +749,7 @@ async function apiCall(path, method = 'GET', body = null) {
     throw new Error(`${res.status}: ${msg}`);
   }
   if (res.status === 204 || method === 'DELETE') return null;
-  const proxyData = await res.json();
-  return JSON.parse(proxyData.contents);
+  return await res.json();
 }
 
 // ─────────────────────────────────────────────
