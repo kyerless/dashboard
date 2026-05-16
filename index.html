@@ -6,7 +6,7 @@
 <title>Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Kumbh+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -28,7 +28,8 @@
 html, body {
   height: 100%;
   overflow: hidden;
-  font-family: 'DM Mono', monospace;
+  font-family: 'Kumbh Sans', sans-serif;
+  font-size: 14px;
   color: var(--text);
   background: #08041a;
 }
@@ -37,8 +38,7 @@ html, body {
 #bg-animated {
   position: fixed; inset: 0; z-index: 0;
   background: linear-gradient(135deg, #08041a 0%, #110836 40%, #190a2c 70%, #0c0e3a 100%);
-  background-size: 400% 400%;
-  animation: gradShift 20s ease infinite;
+  will-change: auto;
 }
 #bg-gif {
   position: fixed; inset: 0; z-index: 1;
@@ -79,8 +79,8 @@ html, body {
   background: var(--glass);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -273,8 +273,8 @@ html, body {
   border-radius: var(--radius-sm);
   padding: 9px 13px;
   color: var(--text);
-  font-family: 'DM Mono', monospace;
-  font-size: 12px;
+  font-family: 'Kumbh Sans', sans-serif;
+  font-size: 15px;
   outline: none;
   transition: border-color 0.2s;
 }
@@ -347,7 +347,7 @@ html, body {
 
 .task-content {
   flex: 1;
-  font-size: 12px;
+  font-size: 15px;
   line-height: 1.55;
   color: var(--text);
   word-break: break-word;
@@ -513,6 +513,17 @@ html, body {
 }
 .setup-card .tagline a { color: var(--accent-2); text-decoration: none; }
 .setup-card .tagline a:hover { text-decoration: underline; }
+
+.task-item.dragging {
+  opacity: 0.4;
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.task-item.drag-over {
+  border-color: var(--accent-2);
+  background: rgba(184,122,238,0.08);
+}
+  
 </style>
 </head>
 <body>
@@ -857,13 +868,46 @@ function renderTasks() {
     return;
   }
   list.innerHTML = tasks.map((t, i) => `
-    <div class="task-item" data-id="${t.id}">
+    <div class="task-item" data-id="${t.id}" draggable="true">
       <div class="task-check" onclick="completeTask('${t.id}')" title="Mark complete"></div>
       <div class="task-content">${escHtml(t.content)}</div>
       <button class="task-del" onclick="deleteTask('${t.id}')" title="Delete task">✕</button>
     </div>
     ${i < tasks.length - 1 ? '<div class="task-sep"></div>' : ''}
   `).join('');
+
+  let dragSrc = null;
+  list.querySelectorAll('.task-item').forEach(row => {
+    row.addEventListener('dragstart', e => {
+      dragSrc = row;
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', () => {
+      list.querySelectorAll('.task-item').forEach(r => {
+        r.classList.remove('dragging', 'drag-over');
+      });
+    });
+    row.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (row !== dragSrc) {
+        list.querySelectorAll('.task-item').forEach(r => r.classList.remove('drag-over'));
+        row.classList.add('drag-over');
+      }
+    });
+    row.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!dragSrc || dragSrc === row) return;
+      const fromId = dragSrc.dataset.id;
+      const toId   = row.dataset.id;
+      const fromIdx = tasks.findIndex(t => t.id === fromId);
+      const toIdx   = tasks.findIndex(t => t.id === toId);
+      const [moved] = tasks.splice(fromIdx, 1);
+      tasks.splice(toIdx, 0, moved);
+      renderTasks();
+    });
+  });
 }
 
 function renderTasksError() {
