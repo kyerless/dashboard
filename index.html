@@ -11,7 +11,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --glass:        rgba(14, 10, 30, 0.85);
+  --glass:        rgba(14, 10, 30, 0.95);
   --glass-light:  rgba(255, 255, 255, 0.04);
   --glass-border: rgba(255, 255, 255, 0.08);
   --accent:       #f0a500;
@@ -50,7 +50,7 @@ html, body {
 #bg-gif.active { opacity: 1; }
 #bg-overlay {
   position: fixed; inset: 0; z-index: 2;
-  background: rgba(6, 3, 18, 0.80);
+  background: rgba(6, 3, 18, 0.95);
 }
 #grain {
   position: fixed; inset: 0; z-index: 3;
@@ -68,10 +68,6 @@ html, body {
 #app {
   position: relative; z-index: 10;
   height: 100vh;
-  display: flex;
-  flex-direction: column;
-  padding: 14px;
-  gap: 12px;
 }
 
 /* ── Glass panel base ── */
@@ -79,9 +75,10 @@ html, body {
   background: var(--glass);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 .panel-header {
   padding: 12px 18px;
@@ -116,7 +113,7 @@ html, body {
 }
 #topbar .left { display: flex; align-items: center; gap: 12px; }
 #clock {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Kumbh Sans', sans-serif;
   font-size: 16px;
   font-weight: 600;
   color: var(--muted);
@@ -182,9 +179,6 @@ html, body {
   flex: 1;
   min-height: 0;
 }
-
-/* ── Shortcuts panel ── */
-#shortcuts-panel { width: 210px; flex-shrink: 0; }
 
 .shortcut-grid {
   display: grid;
@@ -255,9 +249,6 @@ html, body {
   letter-spacing: 0.05em;
 }
 .add-shortcut-btn:hover { border-color: var(--accent); color: var(--accent); }
-
-/* ── Tasks panel ── */
-#tasks-panel { flex: 1; }
 
 .task-add-row {
   display: flex;
@@ -521,6 +512,28 @@ html, body {
   border-color: var(--accent-2);
   background: rgba(184,122,238,0.08);
 }
+
+/* ── Window Manager ── */
+.win {
+  position: fixed;
+  min-width: 180px;
+  min-height: 80px;
+  overflow: visible;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+}
+.panel-header { cursor: move; }
+.win-resize {
+  position: absolute;
+  z-index: 999;
+}
+.win-resize-n  { top:-4px;    left:8px;    right:8px;   height:8px;  cursor:n-resize;  }
+.win-resize-s  { bottom:-4px; left:8px;    right:8px;   height:8px;  cursor:s-resize;  }
+.win-resize-e  { right:-4px;  top:8px;     bottom:8px;  width:8px;   cursor:e-resize;  }
+.win-resize-w  { left:-4px;   top:8px;     bottom:8px;  width:8px;   cursor:w-resize;  }
+.win-resize-ne { top:-4px;    right:-4px;  width:12px;  height:12px; cursor:ne-resize; }
+.win-resize-nw { top:-4px;    left:-4px;   width:12px;  height:12px; cursor:nw-resize; }
+.win-resize-se { bottom:-4px; right:-4px;  width:12px;  height:12px; cursor:se-resize; }
+.win-resize-sw { bottom:-4px; left:-4px;   width:12px;  height:12px; cursor:sw-resize; }
   
 </style>
 </head>
@@ -558,7 +571,7 @@ html, body {
 <div id="app">
 
   <!-- Top bar -->
-  <div class="panel" id="topbar" style="flex-direction:row; align-items:center; justify-content:space-between; padding:10px 18px; flex-shrink:0; overflow:visible;">
+  <div class="panel win" id="topbar" data-self-drag="true" style="flex-direction:row; align-items:center; justify-content:space-between; padding:10px 18px; overflow:visible;">
     <div style="display:flex; align-items:center; gap:12px;">
       <span id="clock">12:00 AM</span>
       <div class="dot-sep"></div>
@@ -578,7 +591,7 @@ html, body {
   <div id="content">
 
     <!-- Shortcuts -->
-    <div class="panel" id="shortcuts-panel">
+    <div class="panel win" id="shortcuts-panel">
       <div class="panel-header">
         <span>Shortcuts</span>
       </div>
@@ -589,7 +602,7 @@ html, body {
     </div>
 
     <!-- Tasks -->
-    <div class="panel" id="tasks-panel">
+    <div class="panel win" id="tasks-panel">
       <div class="panel-header">
         <span>To-Do List</span>
         <span id="task-count" style="color:var(--accent); font-size:14px;"></span>
@@ -671,6 +684,7 @@ const LS_KEYS = {
   SHORTCUTS: 'dash_shortcuts',
   GIF:       'dash_gif',
   TITLE:     'dash_title',
+  WINDOWS:   'dash_windows',
 };
 
 // ─────────────────────────────────────────────
@@ -681,9 +695,151 @@ let tasks     = [];
 let shortcuts = JSON.parse(localStorage.getItem(LS_KEYS.SHORTCUTS) || '[]');
 
 // ─────────────────────────────────────────────
+// Window Manager
+// ─────────────────────────────────────────────
+const WIN_IDS = ['topbar', 'shortcuts-panel', 'tasks-panel'];
+
+function defaultWinState() {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  return {
+    'topbar':          { x: 14,  y: 14,  w: W - 28,   h: 54        },
+    'shortcuts-panel': { x: 14,  y: 82,  w: 220,      h: H - 110   },
+    'tasks-panel':     { x: 248, y: 82,  w: W - 276,  h: H - 110   },
+  };
+}
+
+let winState  = {};
+let zTop      = 50;
+
+function loadWinState() {
+  const saved = localStorage.getItem(LS_KEYS.WINDOWS);
+  winState = saved ? JSON.parse(saved) : defaultWinState();
+}
+
+function saveWinState() {
+  localStorage.setItem(LS_KEYS.WINDOWS, JSON.stringify(winState));
+}
+
+function applyWinState() {
+  WIN_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    const s  = winState[id];
+    if (!el || !s) return;
+    el.style.left   = s.x + 'px';
+    el.style.top    = s.y + 'px';
+    el.style.width  = s.w + 'px';
+    el.style.height = s.h + 'px';
+  });
+}
+
+function bringToFront(id) {
+  document.getElementById(id).style.zIndex = ++zTop;
+}
+
+function startDrag(e, id) {
+  const el = document.getElementById(id);
+  const s  = winState[id];
+  const ox = e.clientX - s.x;
+  const oy = e.clientY - s.y;
+  bringToFront(id);
+  document.body.style.userSelect = 'none';
+
+  function onMove(e) {
+    s.x = e.clientX - ox;
+    s.y = e.clientY - oy;
+    el.style.left = s.x + 'px';
+    el.style.top  = s.y + 'px';
+  }
+  function onUp() {
+    document.body.style.userSelect = '';
+    saveWinState();
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup',   onUp);
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup',   onUp);
+}
+
+function startResize(e, id, dir) {
+  const el   = document.getElementById(id);
+  const s    = winState[id];
+  const x0   = e.clientX;
+  const y0   = e.clientY;
+  const sw   = s.w;
+  const sh   = s.h;
+  const sl   = s.x;
+  const st   = s.y;
+  const minW = 180;
+  const minH = 80;
+  bringToFront(id);
+  document.body.style.userSelect = 'none';
+
+  function onMove(e) {
+    const dx = e.clientX - x0;
+    const dy = e.clientY - y0;
+    if (dir.includes('e')) s.w = Math.max(minW, sw + dx);
+    if (dir.includes('s')) s.h = Math.max(minH, sh + dy);
+    if (dir.includes('w')) {
+      const nw = Math.max(minW, sw - dx);
+      s.x = sl + (sw - nw);
+      s.w = nw;
+    }
+    if (dir.includes('n')) {
+      const nh = Math.max(minH, sh - dy);
+      s.y = st + (sh - nh);
+      s.h = nh;
+    }
+    el.style.left   = s.x + 'px';
+    el.style.top    = s.y + 'px';
+    el.style.width  = s.w + 'px';
+    el.style.height = s.h + 'px';
+  }
+  function onUp() {
+    document.body.style.userSelect = '';
+    saveWinState();
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup',   onUp);
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup',   onUp);
+}
+
+function initWindowManager() {
+  loadWinState();
+  applyWinState();
+
+  WIN_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener('mousedown', () => bringToFront(id));
+
+    const handle = el.dataset.selfDrag ? el : el.querySelector('.panel-header');
+    if (handle) {
+      handle.addEventListener('mousedown', e => {
+        if (e.target.closest('button, input, a, select')) return;
+        e.preventDefault();
+        startDrag(e, id);
+      });
+    }
+
+    ['n','s','e','w','ne','nw','se','sw'].forEach(dir => {
+      const r = document.createElement('div');
+      r.className = `win-resize win-resize-${dir}`;
+      r.addEventListener('mousedown', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        startResize(e, id, dir);
+      });
+      el.appendChild(r);
+    });
+  });
+}
+  
+// ─────────────────────────────────────────────
 // Init
 // ─────────────────────────────────────────────
 function init() {
+  initWindowManager();
   startClock();
   applyGif(localStorage.getItem(LS_KEYS.GIF) || '');
   applyTitle(localStorage.getItem(LS_KEYS.TITLE) || 'Dashboard');
@@ -853,6 +1009,34 @@ async function deleteTask(id) {
 }
 
 // ─────────────────────────────────────────────
+// Sync task order to Todoist
+// ─────────────────────────────────────────────
+async function syncReorder() {
+  const commands = [{
+    type: 'item_reorder',
+    uuid: crypto.randomUUID(),
+    args: {
+      items: tasks.map((t, i) => ({ id: t.id, child_order: i + 1 }))
+    }
+  }];
+  try {
+    const res = await fetch(TODOIST_BASE + '/sync', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${TOKEN}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ commands: JSON.stringify(commands) }).toString(),
+    });
+    if (!res.ok) throw new Error(`Reorder sync failed: ${res.status}`);
+    setStatus('ok', `${tasks.length} task${tasks.length !== 1 ? 's' : ''}`);
+  } catch (e) {
+    setStatus('err', 'Reorder failed');
+    console.error('[syncReorder]', e);
+  }
+}
+  
+// ─────────────────────────────────────────────
 // Render tasks
 // ─────────────────────────────────────────────
 function renderTasks() {
@@ -904,6 +1088,8 @@ function renderTasks() {
       const [moved] = tasks.splice(fromIdx, 1);
       tasks.splice(toIdx, 0, moved);
       renderTasks();
+      setStatus('loading', 'Saving order...');
+      syncReorder();
     });
   });
 }
