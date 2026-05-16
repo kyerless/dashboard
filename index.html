@@ -11,9 +11,9 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --glass:        rgba(14, 10, 30, 0.95);
-  --glass-light:  rgba(255, 255, 255, 0.04);
-  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass:        rgba(18, 18, 18, 0.95);
+  --glass-light:  rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.10);
   --accent:       #f0a500;
   --accent-dim:   rgba(240, 165, 0, 0.12);
   --accent-2:     #b87aee;
@@ -31,19 +31,19 @@ html, body {
   font-family: 'Kumbh Sans', sans-serif;
   font-size: 18px;
   color: var(--text);
-  background: #08041a;
+  background: #111111;
 }
 
 /* ── Background layers ── */
 #bg-animated {
   position: fixed; inset: 0; z-index: 0;
-  background: linear-gradient(135deg, #08041a 0%, #110836 40%, #190a2c 70%, #0c0e3a 100%);
+  background: linear-gradient(135deg, #111111 0%, #1a1a1a 40%, #1f1f1f 70%, #141414 100%);
   will-change: auto;
 }
 #bg-gif {
   position: fixed; inset: 0; z-index: 1;
   background-size: cover;
-  background-position: center;
+  background-position: center 20%;
   opacity: 0;
   transition: opacity 0.8s ease;
 }
@@ -387,7 +387,7 @@ html, body {
 /* ── Modals ── */
 .modal-bg {
   position: fixed; inset: 0; z-index: 200;
-  background: rgba(4, 2, 14, 0.75);
+  background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex;
@@ -399,7 +399,7 @@ html, body {
 @keyframes bgFadeIn { from{opacity:0} to{opacity:1} }
 
 .modal {
-  background: rgba(16, 11, 36, 0.97);
+  background: rgba(20, 20, 20, 0.97);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
   padding: 26px 28px;
@@ -485,13 +485,13 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(6, 3, 16, 0.88);
+  background: rgba(0, 0, 0, 0.88);
   backdrop-filter: blur(10px);
 }
 #setup-screen.hidden { display: none; }
 
 .setup-card {
-  background: rgba(14, 10, 32, 0.97);
+  background: rgba(20, 20, 20, 0.97);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
   padding: 38px 36px;
