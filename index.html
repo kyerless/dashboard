@@ -11,7 +11,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --glass:        rgba(14, 10, 30, 0.65);
+  --glass:        rgba(14, 10, 30, 0.85);
   --glass-light:  rgba(255, 255, 255, 0.04);
   --glass-border: rgba(255, 255, 255, 0.08);
   --accent:       #f0a500;
@@ -29,7 +29,7 @@ html, body {
   height: 100%;
   overflow: hidden;
   font-family: 'Kumbh Sans', sans-serif;
-  font-size: 14px;
+  font-size: 18px;
   color: var(--text);
   background: #08041a;
 }
@@ -50,7 +50,7 @@ html, body {
 #bg-gif.active { opacity: 1; }
 #bg-overlay {
   position: fixed; inset: 0; z-index: 2;
-  background: rgba(6, 3, 18, 0.55);
+  background: rgba(6, 3, 18, 0.80);
 }
 #grain {
   position: fixed; inset: 0; z-index: 3;
@@ -79,8 +79,6 @@ html, body {
   background: var(--glass);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -89,7 +87,7 @@ html, body {
   padding: 12px 18px;
   border-bottom: 1px solid var(--glass-border);
   font-family: 'Syne', sans-serif;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -119,7 +117,7 @@ html, body {
 #topbar .left { display: flex; align-items: center; gap: 12px; }
 #clock {
   font-family: 'Syne', sans-serif;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--muted);
   letter-spacing: 0.12em;
@@ -132,7 +130,7 @@ html, body {
 }
 #site-title {
   font-family: 'Syne', sans-serif;
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -144,7 +142,7 @@ html, body {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 10px;
+  font-size: 14px;
   color: var(--muted);
   letter-spacing: 0.05em;
 }
@@ -168,7 +166,7 @@ html, body {
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
   transition: all 0.2s;
-  font-size: 15px;
+  font-size: 19px;
   flex-shrink: 0;
 }
 .icon-btn:hover {
@@ -216,9 +214,9 @@ html, body {
   transform: translateY(-2px);
   box-shadow: 0 6px 24px rgba(240,165,0,0.1);
 }
-.shortcut-emoji { font-size: 20px; line-height: 1; }
+.shortcut-emoji { font-size: 24px; line-height: 1; }
 .shortcut-label {
-  font-size: 9px;
+  font-size: 14px;
   color: var(--muted);
   word-break: break-word;
   line-height: 1.35;
@@ -234,7 +232,7 @@ html, body {
   display: none;
   align-items: center;
   justify-content: center;
-  font-size: 8px;
+  font-size: 14px;
   color: white;
   cursor: pointer;
   border: none;
@@ -251,7 +249,7 @@ html, body {
   border-radius: var(--radius-sm);
   color: var(--muted);
   font-family: 'DM Mono', monospace;
-  font-size: 10px;
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
   letter-spacing: 0.05em;
@@ -274,7 +272,7 @@ html, body {
   padding: 9px 13px;
   color: var(--text);
   font-family: 'Kumbh Sans', sans-serif;
-  font-size: 15px;
+  font-size: 18px;
   outline: none;
   transition: border-color 0.2s;
 }
@@ -289,7 +287,7 @@ html, body {
   color: #08041a;
   font-family: 'Syne', sans-serif;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 16px;
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
@@ -331,7 +329,7 @@ html, body {
   transition: all 0.18s;
   margin-top: 1px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 9px;
+  font-size: 14px;
   color: transparent;
 }
 .task-check:hover {
@@ -347,7 +345,7 @@ html, body {
 
 .task-content {
   flex: 1;
-  font-size: 15px;
+  font-size: 18px;
   line-height: 1.55;
   color: var(--text);
   word-break: break-word;
@@ -359,7 +357,7 @@ html, body {
   border: none;
   color: var(--danger);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 16px;
   padding: 0 2px;
   transition: opacity 0.15s;
   flex-shrink: 0;
@@ -377,10 +375,10 @@ html, body {
   text-align: center;
   padding: 36px 20px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 16px;
   line-height: 1.9;
 }
-.empty-state .icon { font-size: 30px; margin-bottom: 10px; }
+.empty-state .icon { font-size: 34px; margin-bottom: 10px; }
 
 /* ── Modals ── */
 .modal-bg {
@@ -411,7 +409,7 @@ html, body {
 
 .modal h2 {
   font-family: 'Syne', sans-serif;
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -421,7 +419,7 @@ html, body {
 .form-group { margin-bottom: 14px; }
 .form-group label {
   display: block;
-  font-size: 9px;
+  font-size: 14px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--muted);
@@ -435,13 +433,13 @@ html, body {
   padding: 9px 12px;
   color: var(--text);
   font-family: 'DM Mono', monospace;
-  font-size: 12px;
+  font-size: 16px;
   outline: none;
   transition: border-color 0.2s;
 }
 .form-input:focus { border-color: var(--accent); }
 .form-hint {
-  font-size: 9px;
+  font-size: 14px;
   color: var(--muted);
   margin-top: 5px;
   line-height: 1.6;
@@ -460,7 +458,7 @@ html, body {
   border-radius: var(--radius-sm);
   font-family: 'Syne', sans-serif;
   font-weight: 700;
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.08em;
   cursor: pointer;
   border: none;
@@ -498,7 +496,7 @@ html, body {
 }
 .setup-card h1 {
   font-family: 'Syne', sans-serif;
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 800;
   color: var(--accent);
   letter-spacing: 0.14em;
@@ -506,7 +504,7 @@ html, body {
   margin-bottom: 6px;
 }
 .setup-card .tagline {
-  font-size: 11px;
+  font-size: 16px;
   color: var(--muted);
   margin-bottom: 24px;
   line-height: 1.7;
@@ -594,7 +592,7 @@ html, body {
     <div class="panel" id="tasks-panel">
       <div class="panel-header">
         <span>To-Do List</span>
-        <span id="task-count" style="color:var(--accent); font-size:10px;"></span>
+        <span id="task-count" style="color:var(--accent); font-size:14px;"></span>
       </div>
       <div class="panel-body">
         <div class="task-add-row">
@@ -645,7 +643,7 @@ html, body {
     <h2>+ Add Shortcut</h2>
     <div class="form-group">
       <label>Emoji / Icon</label>
-      <input class="form-input" id="sc-emoji" type="text" placeholder="🔗" maxlength="4" style="font-size:20px;" />
+      <input class="form-input" id="sc-emoji" type="text" placeholder="🔗" maxlength="4" style="font-size:24px;" />
     </div>
     <div class="form-group">
       <label>Label</label>
@@ -925,7 +923,7 @@ function renderTasksError() {
 function renderShortcuts() {
   const grid = document.getElementById('shortcut-grid');
   if (!shortcuts.length) {
-    grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; font-size:10px; color:var(--muted); padding:12px 0;">No shortcuts yet</div>`;
+    grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; font-size:14px; color:var(--muted); padding:12px 0;">No shortcuts yet</div>`;
     return;
   }
   grid.innerHTML = shortcuts.map((s, i) => `
