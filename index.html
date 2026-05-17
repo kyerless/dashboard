@@ -181,11 +181,17 @@ html, body {
 }
 
 .shortcut-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   gap: 7px;
   margin-bottom: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
 }
+.shortcut-grid::-webkit-scrollbar { height: 3px; }
+.shortcut-grid::-webkit-scrollbar-track { background: transparent; }
+.shortcut-grid::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 2px; }
 .shortcut-tile {
   background: var(--glass-light);
   border: 1px solid var(--glass-border);
@@ -201,6 +207,8 @@ html, body {
   position: relative;
   min-height: 68px;
   text-align: center;
+  flex-shrink: 0;
+  width: 80px;
 }
 .shortcut-tile:hover {
   border-color: var(--accent);
@@ -582,6 +590,55 @@ html, body {
 .win-resize-nw { top:-4px;    left:-4px;   width:12px;  height:12px; cursor:nw-resize; }
 .win-resize-se { bottom:-4px; right:-4px;  width:12px;  height:12px; cursor:se-resize; }
 .win-resize-sw { bottom:-4px; left:-4px;   width:12px;  height:12px; cursor:sw-resize; }
+
+.rpp-item {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  transition: all 0.18s;
+  cursor: default;
+}
+.rpp-item:hover {
+  background: var(--glass-light);
+  border-color: var(--glass-border);
+}
+.rpp-name {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rpp-path {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  word-break: break-all;
+  line-height: 1.4;
+}
+.rpp-date {
+  font-size: 11px;
+  color: var(--accent);
+  margin-top: 3px;
+  letter-spacing: 0.03em;
+}
+.rpp-pick-btn {
+  width: 100%;
+  padding: 9px;
+  background: transparent;
+  border: 1px dashed var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-family: 'Kumbh Sans', sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.05em;
+  margin-bottom: 10px;
+  text-align: center;
+}
+.rpp-pick-btn:hover { border-color: var(--accent); color: var(--accent); }
   
 </style>
 </head>
@@ -669,6 +726,23 @@ html, body {
       </div>
     </div>
 
+    <!-- Recent RPP Projects -->
+    <div class="panel win" id="rpp-panel">
+      <div class="panel-header">
+        <span>Recent Projects</span>
+        <button class="icon-btn" title="Rescan" onclick="scanRppFiles()" style="font-size:14px;">↻</button>
+      </div>
+      <div class="panel-body">
+        <button class="rpp-pick-btn" onclick="pickRppFolder()">📁 Pick Folder</button>
+        <div id="rpp-list">
+          <div class="empty-state">
+            <div class="icon">🎵</div>
+            Pick a folder above to scan<br>for .rpp project files.
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -750,15 +824,16 @@ let editingShortcutIdx = null;
 // ─────────────────────────────────────────────
 // Window Manager
 // ─────────────────────────────────────────────
-const WIN_IDS = ['topbar', 'shortcuts-panel', 'tasks-panel'];
+const WIN_IDS = ['topbar', 'shortcuts-panel', 'tasks-panel', 'rpp-panel'];
 
 function defaultWinState() {
   const W = window.innerWidth;
   const H = window.innerHeight;
   return {
-    'topbar':          { x: 14,  y: 14,  w: W - 28,   h: 54        },
-    'shortcuts-panel': { x: 14,  y: 82,  w: 220,      h: H - 110   },
-    'tasks-panel':     { x: 248, y: 82,  w: W - 276,  h: H - 110   },
+    'topbar':          { x: 14,  y: 14,  w: W - 28,            h: 54       },
+    'shortcuts-panel': { x: 14,  y: 82,  w: 220,               h: H - 110  },
+    'tasks-panel':     { x: 248, y: 82,  w: Math.round((W - 290) / 2), h: H - 110  },
+    'rpp-panel':       { x: 248 + Math.round((W - 290) / 2) + 12, y: 82, w: Math.round((W - 290) / 2) - 12, h: H - 110 },
   };
 }
 
@@ -1369,6 +1444,100 @@ document.getElementById('shortcut-modal').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeShortcutModal();
 });
 
+// ─────────────────────────────────────────────
+// Recent RPP Projects
+// ─────────────────────────────────────────────
+let rppDirHandle = null;
+
+async function pickRppFolder() {
+  if (!window.showDirectoryPicker) {
+    alert('Your browser does not support the File System Access API.\nTry Chrome or Edge.');
+    return;
+  }
+  try {
+    rppDirHandle = await window.showDirectoryPicker({ mode: 'read' });
+    await scanRppFiles();
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      console.error('[pickRppFolder]', e);
+      renderRppError('Could not access the folder.');
+    }
+  }
+}
+
+async function scanRppFiles() {
+  if (!rppDirHandle) { return; }
+  document.getElementById('rpp-list').innerHTML = `
+    <div class="empty-state">
+      <div class="icon">⋯</div>
+      Scanning subfolders...
+    </div>`;
+  try {
+    const files = [];
+    await walkDir(rppDirHandle, '', files);
+    files.sort((a, b) => b.lastModified - a.lastModified);
+    renderRppFiles(files);
+  } catch (e) {
+    console.error('[scanRppFiles]', e);
+    renderRppError('Scan failed. Try re-picking the folder.');
+  }
+}
+
+async function walkDir(dirHandle, path, results) {
+  for await (const [name, handle] of dirHandle.entries()) {
+    if (handle.kind === 'directory') {
+      await walkDir(handle, path ? `${path}/${name}` : name, results);
+    } else if (handle.kind === 'file' && name.toLowerCase().endsWith('.rpp')) {
+      try {
+        const file = await handle.getFile();
+        results.push({
+          name,
+          path: path ? `${path}/${name}` : name,
+          lastModified: file.lastModified,
+        });
+      } catch (_) { /* skip unreadable files */ }
+    }
+  }
+}
+
+function renderRppFiles(files) {
+  const list = document.getElementById('rpp-list');
+  if (!files.length) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">🎵</div>
+        No .rpp files found<br>in this folder or its subfolders.
+      </div>`;
+    return;
+  }
+  list.innerHTML = files.map((f, i) => `
+    <div class="rpp-item" title="${escHtml(f.path)}">
+      <div class="rpp-name">${escHtml(f.name)}</div>
+      <div class="rpp-path">${escHtml(f.path.includes('/') ? f.path.substring(0, f.path.lastIndexOf('/')) : '.')}</div>
+      <div class="rpp-date">${formatRppDate(f.lastModified)}</div>
+    </div>
+    ${i < files.length - 1 ? '<div class="task-sep"></div>' : ''}
+  `).join('');
+}
+
+function renderRppError(msg) {
+  document.getElementById('rpp-list').innerHTML = `
+    <div class="empty-state">
+      <div class="icon">✗</div>
+      ${escHtml(msg)}
+    </div>`;
+}
+
+function formatRppDate(ts) {
+  const d   = new Date(ts);
+  const now = new Date();
+  const diffMs   = now - d;
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffDays === 0) return 'Today ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (diffDays === 1) return 'Yesterday ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+}
+  
 // ─────────────────────────────────────────────
 // Utilities
 // ─────────────────────────────────────────────
