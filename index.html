@@ -639,6 +639,72 @@ html, body {
   text-align: center;
 }
 .rpp-pick-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Shortcuts toolbar redesign ── */
+#shortcuts-panel {
+  flex-direction: row;
+  align-items: center;
+  padding: 0;
+  gap: 0;
+  min-height: 68px;
+}
+.sc-drag-bar {
+  width: 26px;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  cursor: grab;
+  font-size: 18px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--glass-border);
+  margin-right: 8px;
+  user-select: none;
+  transition: color 0.2s;
+  letter-spacing: -2px;
+}
+.sc-drag-bar:hover  { color: var(--accent); }
+.sc-drag-bar:active { cursor: grabbing; }
+.shortcut-grid {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 7px;
+  overflow-x: auto;
+  flex: 1;
+  padding: 6px 0;
+}
+.shortcut-grid::-webkit-scrollbar       { height: 3px; }
+.shortcut-grid::-webkit-scrollbar-track { background: transparent; }
+.shortcut-grid::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 2px; }
+.shortcut-tile {
+  flex-shrink: 0;
+  width: 72px;
+  min-height: 60px;
+}
+.sc-add-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  margin: 0 8px 0 4px;
+  background: transparent;
+  border: 1px dashed var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Syne', sans-serif;
+}
+.sc-add-btn:hover { border-color: var(--accent); color: var(--accent); }
+.shortcut-tile.sc-dragging  { opacity: 0.35; border-color: var(--accent); background: var(--accent-dim); }
+.shortcut-tile.sc-drag-over { border-color: var(--accent-2); background: rgba(160,160,160,0.1); transform: scale(1.06); }
   
 </style>
 </head>
@@ -697,13 +763,9 @@ html, body {
 
     <!-- Shortcuts -->
     <div class="panel win" id="shortcuts-panel">
-      <div class="panel-header">
-        <span>Shortcuts</span>
-      </div>
-      <div class="panel-body">
-        <div class="shortcut-grid" id="shortcut-grid"></div>
-        <button class="add-shortcut-btn" onclick="openShortcutModal()">+ Add Link</button>
-      </div>
+      <div class="sc-drag-bar" data-drag-handle title="Drag to move">⠿</div>
+      <div class="shortcut-grid" id="shortcut-grid"></div>
+      <button class="sc-add-btn" onclick="openShortcutModal()" title="Add Shortcut">+</button>
     </div>
 
     <!-- Tasks -->
@@ -827,13 +889,14 @@ let editingShortcutIdx = null;
 const WIN_IDS = ['topbar', 'shortcuts-panel', 'tasks-panel', 'rpp-panel'];
 
 function defaultWinState() {
-  const W = window.innerWidth;
-  const H = window.innerHeight;
+  const W  = window.innerWidth;
+  const H  = window.innerHeight;
+  const hw = Math.round((W - 40) / 2);
   return {
-    'topbar':          { x: 14,  y: 14,  w: W - 28,            h: 54       },
-    'shortcuts-panel': { x: 14,  y: 82,  w: 220,               h: H - 110  },
-    'tasks-panel':     { x: 248, y: 82,  w: Math.round((W - 290) / 2), h: H - 110  },
-    'rpp-panel':       { x: 248 + Math.round((W - 290) / 2) + 12, y: 82, w: Math.round((W - 290) / 2) - 12, h: H - 110 },
+    'topbar':          { x: 14, y: 14,  w: W - 28, h: 54      },
+    'shortcuts-panel': { x: 14, y: 82,  w: W - 28, h: 80      },
+    'tasks-panel':     { x: 14, y: 176, w: hw,     h: H - 200 },
+    'rpp-panel':       { x: 14 + hw + 12, y: 176, w: hw - 12, h: H - 200 },
   };
 }
 
@@ -841,8 +904,9 @@ let winState  = {};
 let zTop      = 50;
 
 function loadWinState() {
-  const saved = localStorage.getItem(LS_KEYS.WINDOWS);
-  winState = saved ? JSON.parse(saved) : defaultWinState();
+  const saved    = localStorage.getItem(LS_KEYS.WINDOWS);
+  const defaults = defaultWinState();
+  winState = saved ? { ...defaults, ...JSON.parse(saved) } : defaults;
 }
 
 function saveWinState() {
@@ -941,7 +1005,7 @@ function initWindowManager() {
     const el = document.getElementById(id);
     el.addEventListener('mousedown', () => bringToFront(id));
 
-    const handle = el.dataset.selfDrag ? el : el.querySelector('.panel-header');
+    const handle = el.dataset.selfDrag ? el : (el.querySelector('[data-drag-handle]') || el.querySelector('.panel-header'));
     if (handle) {
       handle.addEventListener('mousedown', e => {
         if (e.target.closest('button, input, a, select')) return;
@@ -1299,11 +1363,12 @@ function renderTasksError() {
 function renderShortcuts() {
   const grid = document.getElementById('shortcut-grid');
   if (!shortcuts.length) {
-    grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; font-size:14px; color:var(--muted); padding:12px 0;">No shortcuts yet</div>`;
+    grid.innerHTML = '';
     return;
   }
   grid.innerHTML = shortcuts.map((s, i) => `
-    <a class="shortcut-tile" href="${escHtml(s.url)}" target="_blank" rel="noopener noreferrer">
+    <a class="shortcut-tile" href="${escHtml(s.url)}" target="_blank" rel="noopener noreferrer"
+       draggable="true" data-sc-idx="${i}">
       ${s.img
         ? `<img class="shortcut-img" src="${escHtml(s.img)}" alt="${escHtml(s.label)}" />`
         : `<span class="shortcut-emoji">${escHtml(s.emoji || '🔗')}</span>`
@@ -1313,6 +1378,46 @@ function renderShortcuts() {
       <button class="shortcut-del"  onclick="removeShortcut(event, ${i})"        title="Remove">✕</button>
     </a>
   `).join('');
+
+  let scDragSrc = null;
+  let scDragged = false;
+  grid.querySelectorAll('.shortcut-tile').forEach(tile => {
+    tile.addEventListener('dragstart', e => {
+      scDragSrc = parseInt(tile.dataset.scIdx);
+      scDragged = false;
+      tile.classList.add('sc-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', scDragSrc.toString());
+    });
+    tile.addEventListener('dragend', () => {
+      grid.querySelectorAll('.shortcut-tile').forEach(t =>
+        t.classList.remove('sc-dragging', 'sc-drag-over')
+      );
+    });
+    tile.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const idx = parseInt(tile.dataset.scIdx);
+      if (idx !== scDragSrc) {
+        grid.querySelectorAll('.shortcut-tile').forEach(t => t.classList.remove('sc-drag-over'));
+        tile.classList.add('sc-drag-over');
+      }
+    });
+    tile.addEventListener('drop', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const toIdx = parseInt(tile.dataset.scIdx);
+      if (scDragSrc === null || scDragSrc === toIdx) return;
+      scDragged = true;
+      const [moved] = shortcuts.splice(scDragSrc, 1);
+      shortcuts.splice(toIdx, 0, moved);
+      persistShortcuts();
+      renderShortcuts();
+    });
+    tile.addEventListener('click', e => {
+      if (scDragged) { e.preventDefault(); scDragged = false; }
+    });
+  });
 }
 
 function removeShortcut(e, i) {
