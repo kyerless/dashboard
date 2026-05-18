@@ -659,10 +659,16 @@ html, body {
 #shortcuts-panel {
   flex-direction: row;
   align-items: center;
-  justify-content: center;
   padding: 0;
   gap: 0;
   min-height: 68px;
+}
+#sc-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  overflow: hidden;
 }
 .sc-drag-bar {
   width: 26px;
@@ -782,8 +788,10 @@ html, body {
     <!-- Shortcuts -->
     <div class="panel win" id="shortcuts-panel">
       <div class="sc-drag-bar" data-drag-handle title="Drag to move">⠿</div>
-      <div class="shortcut-grid" id="shortcut-grid"></div>
-      <button class="sc-add-btn" onclick="openShortcutModal()" title="Add Shortcut">+</button>
+      <div id="sc-center">
+        <div class="shortcut-grid" id="shortcut-grid"></div>
+        <button class="sc-add-btn" onclick="openShortcutModal()" title="Add Shortcut">+</button>
+      </div>
     </div>
 
     <!-- Tasks -->
