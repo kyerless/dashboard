@@ -224,9 +224,10 @@ html, body {
   border-radius: 6px;
 }
 .shortcut-label {
-  font-size: 14px;
+  font-size: 12px;
   color: var(--muted);
-  word-break: break-word;
+  word-break: normal;
+  overflow-wrap: break-word;
   line-height: 1.35;
   letter-spacing: 0.04em;
 }
@@ -639,7 +640,21 @@ html, body {
   text-align: center;
 }
 .rpp-pick-btn:hover { border-color: var(--accent); color: var(--accent); }
+#rpp-folder-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 7px 10px;
+  background: var(--glass-light);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+}
+#rpp-folder-bar.hidden { display: none; }
+#rpp-pick-btn.hidden   { display: none; }
+.rpp-item { cursor: pointer; }
 
+  
 /* ── Shortcuts toolbar redesign ── */
 #shortcuts-panel {
   flex-direction: row;
@@ -681,7 +696,7 @@ html, body {
 .shortcut-grid::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 2px; }
 .shortcut-tile {
   flex-shrink: 0;
-  width: 72px;
+  width: 84px;
   min-height: 60px;
 }
 .sc-add-btn {
@@ -795,7 +810,14 @@ html, body {
         <button class="icon-btn" title="Rescan" onclick="scanRppFiles()" style="font-size:14px;">↻</button>
       </div>
       <div class="panel-body">
-        <button class="rpp-pick-btn" onclick="pickRppFolder()">📁 Pick Folder</button>
+        <div id="rpp-folder-bar" class="hidden">
+          <span id="rpp-folder-name" style="font-size:13px; color:var(--accent); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;"></span>
+          <button onclick="changeRppFolder()" title="Change folder"
+            style="flex-shrink:0; background:none; color:var(--muted); font-size:12px; cursor:pointer; padding:2px 8px; border-radius:4px; border:1px solid var(--glass-border);">
+            Change
+          </button>
+        </div>
+        <button class="rpp-pick-btn" id="rpp-pick-btn" onclick="pickRppFolder()">📁 Pick Folder</button>
         <div id="rpp-list">
           <div class="empty-state">
             <div class="icon">🎵</div>
@@ -1036,6 +1058,7 @@ function init() {
   applyGif(localStorage.getItem(LS_KEYS.GIF) || '');
   applyTitle(localStorage.getItem(LS_KEYS.TITLE) || 'Dashboard');
   renderShortcuts();
+  tryRestoreRppFolder();
   if (!TOKEN) {
     show('setup-screen');
     setStatus('', '—');
@@ -1552,8 +1575,90 @@ document.getElementById('shortcut-modal').addEventListener('click', e => {
 // ─────────────────────────────────────────────
 // Recent RPP Projects
 // ─────────────────────────────────────────────
-let rppDirHandle = null;
+let rppDirHandle   = null;
+let rppFileHandles = {};
 
+// ─── IndexedDB: persist directory handle across page loads ───
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('dash-db', 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore('handles');
+    req.onsuccess  = e  => resolve(e.target.result);
+    req.onerror    = () => reject(req.error);
+  });
+}
+
+async function saveRppHandle(handle) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('handles', 'readwrite');
+    tx.objectStore('handles').put(handle, 'rpp-dir');
+    tx.oncomplete = resolve;
+    tx.onerror    = () => reject(tx.error);
+  });
+}
+
+async function loadRppHandle() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx  = db.transaction('handles', 'readonly');
+    const req = tx.objectStore('handles').get('rpp-dir');
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+// ─── Folder bar helpers ───
+function showRppFolderBar(name) {
+  document.getElementById('rpp-folder-name').textContent = '📁 ' + name;
+  document.getElementById('rpp-folder-bar').classList.remove('hidden');
+  document.getElementById('rpp-pick-btn').classList.add('hidden');
+}
+
+// ─── Restore saved folder on load ───
+async function tryRestoreRppFolder() {
+  try {
+    const handle = await loadRppHandle();
+    if (!handle) return;
+    const perm = await handle.queryPermission({ mode: 'read' });
+    if (perm === 'granted') {
+      rppDirHandle = handle;
+      showRppFolderBar(handle.name);
+      await scanRppFiles();
+    } else {
+      // Needs user gesture to re-grant — show reconnect prompt on the pick button
+      const btn = document.getElementById('rpp-pick-btn');
+      btn.textContent = `🔄 Reconnect "${handle.name}"`;
+      btn.onclick = async () => {
+        const p = await handle.requestPermission({ mode: 'read' });
+        if (p === 'granted') {
+          rppDirHandle = handle;
+          btn.textContent = '📁 Pick Folder';
+          btn.onclick     = pickRppFolder;
+          showRppFolderBar(handle.name);
+          await scanRppFiles();
+        }
+      };
+      document.getElementById('rpp-list').innerHTML = `
+        <div class="empty-state">
+          <div class="icon">🔑</div>
+          Click Reconnect above<br>to re-access "${escHtml(handle.name)}".
+        </div>`;
+    }
+  } catch (e) {
+    console.warn('[tryRestoreRppFolder]', e);
+  }
+}
+
+// ─── Change folder (from the bar's Change button) ───
+async function changeRppFolder() {
+  document.getElementById('rpp-folder-bar').classList.add('hidden');
+  document.getElementById('rpp-pick-btn').classList.remove('hidden');
+  document.getElementById('rpp-pick-btn').textContent = '📁 Pick Folder';
+  document.getElementById('rpp-pick-btn').onclick      = pickRppFolder;
+  await pickRppFolder();
+}
+  
 async function pickRppFolder() {
   if (!window.showDirectoryPicker) {
     alert('Your browser does not support the File System Access API.\nTry Chrome or Edge.');
@@ -1561,6 +1666,8 @@ async function pickRppFolder() {
   }
   try {
     rppDirHandle = await window.showDirectoryPicker({ mode: 'read' });
+    await saveRppHandle(rppDirHandle);
+    showRppFolderBar(rppDirHandle.name);
     await scanRppFiles();
   } catch (e) {
     if (e.name !== 'AbortError') {
@@ -1579,6 +1686,7 @@ async function scanRppFiles() {
     </div>`;
   try {
     const files = [];
+    rppFileHandles = {};
     await walkDir(rppDirHandle, '', files);
     files.sort((a, b) => b.lastModified - a.lastModified);
     renderRppFiles(files);
@@ -1594,11 +1702,14 @@ async function walkDir(dirHandle, path, results) {
       await walkDir(handle, path ? `${path}/${name}` : name, results);
     } else if (handle.kind === 'file' && name.toLowerCase().endsWith('.rpp')) {
       try {
-        const file = await handle.getFile();
+        const file     = await handle.getFile();
+        const fullPath = path ? `${path}/${name}` : name;
+        rppFileHandles[fullPath] = handle;
         results.push({
           name,
-          path: path ? `${path}/${name}` : name,
+          path:         fullPath,
           lastModified: file.lastModified,
+          rootFolder:   rppDirHandle.name,
         });
       } catch (_) { /* skip unreadable files */ }
     }
@@ -1615,14 +1726,43 @@ function renderRppFiles(files) {
       </div>`;
     return;
   }
-  list.innerHTML = files.map((f, i) => `
-    <div class="rpp-item" title="${escHtml(f.path)}">
-      <div class="rpp-name">${escHtml(f.name)}</div>
-      <div class="rpp-path">${escHtml(f.path.includes('/') ? f.path.substring(0, f.path.lastIndexOf('/')) : '.')}</div>
-      <div class="rpp-date">${formatRppDate(f.lastModified)}</div>
-    </div>
-    ${i < files.length - 1 ? '<div class="task-sep"></div>' : ''}
-  `).join('');
+  list.innerHTML = files.map((f, i) => {
+    const folderPart = f.path.includes('/')
+      ? f.path.substring(0, f.path.lastIndexOf('/'))
+      : '';
+    const displayPath = f.rootFolder + (folderPart ? '/' + folderPart : '');
+    return `
+      <div class="rpp-item" data-path="${escHtml(f.path)}" title="Double-click to open · ${escHtml(f.path)}">
+        <div class="rpp-name">${escHtml(f.name)}</div>
+        <div class="rpp-path">${escHtml(displayPath)}</div>
+        <div class="rpp-date">${formatRppDate(f.lastModified)}</div>
+      </div>
+      ${i < files.length - 1 ? '<div class="task-sep"></div>' : ''}
+    `;
+  }).join('');
+
+  list.querySelectorAll('.rpp-item').forEach(item => {
+    item.addEventListener('dblclick', () => openRppFile(item.dataset.path));
+  });
+}
+
+async function openRppFile(path) {
+  const handle = rppFileHandles[path];
+  if (!handle) { alert('File handle lost. Try rescanning.'); return; }
+  try {
+    const file = await handle.getFile();
+    const url  = URL.createObjectURL(file);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (e) {
+    console.error('[openRppFile]', e);
+    alert('Could not open file: ' + e.message);
+  }
 }
 
 function renderRppError(msg) {
