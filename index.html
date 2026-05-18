@@ -666,7 +666,7 @@ html, body {
 #sc-center {
   flex: 1;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
   overflow: hidden;
   gap: 7px;
@@ -693,12 +693,11 @@ html, body {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
-  align-items: stretch;
+  align-items: center;
   gap: 7px;
   overflow-x: auto;
   flex: none;
   padding: 4px 0;
-  align-self: stretch;
   max-width: calc(100% - 60px);
 }
 .shortcut-grid::-webkit-scrollbar       { height: 3px; }
@@ -708,7 +707,7 @@ html, body {
   flex-shrink: 0;
   width: 84px;
   min-height: unset;
-  height: 100%;
+  height: 56px;
 }
 .sc-add-btn {
   flex-shrink: 0;
@@ -1764,18 +1763,10 @@ function renderRppFiles(files) {
   }).join('');
 
   list.querySelectorAll('.rpp-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const root      = localStorage.getItem(LS_KEYS.RPP_ROOT) || '';
-      const filePath  = item.dataset.path;
-      const folderRel = filePath.includes('/')
-        ? filePath.substring(0, filePath.lastIndexOf('/'))
-        : '';
-      const fullFolder = root
-        ? root + (folderRel ? '/' + folderRel : '')
-        : folderRel;
-      window.location.href = 'explore:///' + fullFolder;
-    });
+  item.addEventListener('click', () => {
+    openRppFile(item.dataset.path);
   });
+});
 }
 
 async function openRppFile(path) {
