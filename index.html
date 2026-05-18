@@ -659,6 +659,7 @@ html, body {
 #shortcuts-panel {
   flex-direction: row;
   align-items: center;
+  justify-content: center;
   padding: 0;
   gap: 0;
   min-height: 68px;
@@ -688,7 +689,7 @@ html, body {
   align-items: stretch;
   gap: 7px;
   overflow-x: auto;
-  flex: 1;
+  flex: none;
   padding: 4px 0;
   align-self: stretch;
 }
@@ -1758,14 +1759,22 @@ function renderRppFiles(files) {
 }
 
 async function openRppFile(path) {
-  const root = localStorage.getItem(LS_KEYS.RPP_ROOT) || '';
-  if (!root) {
-    alert('Set your Root Folder Path in Settings first.\nExample: C:/Users/kyer/Music/YR');
-    return;
+  const handle = rppFileHandles[path];
+  if (!handle) { alert('File handle lost. Try rescanning.'); return; }
+  try {
+    const file = await handle.getFile();
+    const url  = URL.createObjectURL(file);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (e) {
+    console.error('[openRppFile]', e);
+    alert('Could not open file: ' + e.message);
   }
-  const fullPath   = root + '/' + path;
-  const reaperLink = 'reaper:///' + fullPath;
-  window.location.href = reaperLink;
 }
 
 function renderRppError(msg) {
