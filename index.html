@@ -678,7 +678,7 @@ html, body {
 }
 .sc-drag-bar {
   width: 26px;
-  align-self: stretch;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -804,7 +804,13 @@ html, body {
     <div class="panel win" id="tasks-panel">
       <div class="panel-header">
         <span>To-Do List</span>
-        <span id="task-count" style="color:var(--accent); font-size:14px;"></span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span id="task-count" style="color:var(--accent); font-size:14px;"></span>
+          <button class="icon-btn" id="sort-btn" onclick="toggleSort()" title="Toggle sort order"
+            style="width:auto; padding:0 9px; font-size:12px; letter-spacing:0.06em; font-family:'Syne',sans-serif;">
+            ↓ Newest
+          </button>
+        </div>
       </div>
       <div class="panel-body">
         <div class="task-add-row">
@@ -918,6 +924,7 @@ const LS_KEYS = {
   TITLE:     'dash_title',
   WINDOWS:   'dash_windows',
   RPP_ROOT:  'dash_rpp_root',
+  SORT:      'dash_sort',
 };
 
 // ─────────────────────────────────────────────
@@ -927,6 +934,7 @@ let TOKEN     = localStorage.getItem(LS_KEYS.TOKEN) || '';
 let tasks     = [];
 let shortcuts          = JSON.parse(localStorage.getItem(LS_KEYS.SHORTCUTS) || '[]');
 let editingShortcutIdx = null;
+let taskSort = localStorage.getItem(LS_KEYS.SORT) || 'desc';
 
 // ─────────────────────────────────────────────
 // Window Manager
@@ -1081,6 +1089,7 @@ function init() {
   applyGif(localStorage.getItem(LS_KEYS.GIF) || '');
   applyTitle(localStorage.getItem(LS_KEYS.TITLE) || 'Dashboard');
   renderShortcuts();
+  updateSortBtn();
   tryRestoreRppFolder();
   if (!TOKEN) {
     show('setup-screen');
@@ -1164,7 +1173,7 @@ async function loadTasks() {
   try {
     const data = await apiCall('/tasks');
     tasks = Array.isArray(data) ? data : (data.results ?? []);
-    tasks.sort((a, b) => new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0));
+    applyTaskSort();
     renderTasks();
     const n = tasks.length;
     setStatus('ok', `${n} task${n !== 1 ? 's' : ''}`);
@@ -1248,6 +1257,31 @@ async function deleteTask(id) {
     setStatus('err', 'Failed to delete');
     console.error('[deleteTask]', e);
   }
+}
+
+// ─────────────────────────────────────────────
+// Task Sort
+// ─────────────────────────────────────────────
+function applyTaskSort() {
+  tasks.sort((a, b) => {
+    const da = new Date(a.created_at ?? 0);
+    const db = new Date(b.created_at ?? 0);
+    return taskSort === 'asc' ? da - db : db - da;
+  });
+}
+
+function toggleSort() {
+  taskSort = taskSort === 'desc' ? 'asc' : 'desc';
+  localStorage.setItem(LS_KEYS.SORT, taskSort);
+  updateSortBtn();
+  applyTaskSort();
+  renderTasks();
+}
+
+function updateSortBtn() {
+  const btn = document.getElementById('sort-btn');
+  if (!btn) return;
+  btn.textContent = taskSort === 'desc' ? '↓ Newest' : '↑ Oldest';
 }
 
 // ─────────────────────────────────────────────
