@@ -1777,8 +1777,8 @@ function openRppFile(path) {
     alert('Set your Root Folder Path in Settings (⚙) first.');
     return;
   }
-  const fullPath = (root + '/' + path).replace(/\//g, '\\');
-  window.location.href = 'reaper://' + encodeURIComponent(fullPath);
+  const fullPath = root + '/' + path;
+  window.location.href = 'reaper://' + fullPath.replace(/ /g, '%20');
 }
 
 function renderRppError(msg) {
