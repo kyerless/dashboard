@@ -1506,8 +1506,8 @@ function renderShortcuts() {
     return;
   }
   grid.innerHTML = shortcuts.map((s, i) => `
-    <a class="shortcut-tile" href="${escHtml(s.url)}" target="_blank" rel="noopener noreferrer"
-       draggable="true" data-sc-idx="${i}">
+    <a class="shortcut-tile" href="${escHtml(s.url)}" data-sc-idx="${i}"
+       draggable="true" onclick="openShortcut(event, '${escHtml(s.url)}')">
       ${s.img
         ? `<img class="shortcut-img" src="${escHtml(s.img)}" alt="${escHtml(s.label)}" />`
         : `<span class="shortcut-emoji">${escHtml(s.emoji || '🔗')}</span>`
@@ -1900,6 +1900,11 @@ function formatRppDate(ts) {
 // ─────────────────────────────────────────────
 function show(id) { document.getElementById(id).classList.remove('hidden'); }
 function hide(id) { document.getElementById(id).classList.add('hidden'); }
+
+function openShortcut(e, url) {
+  e.preventDefault();
+  window.open(url, '_blank');
+}
 
 function addScrollButtons(panel) {
   const body = panel.querySelector('.panel-body');
