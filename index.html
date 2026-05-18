@@ -104,6 +104,29 @@ html, body {
 .panel-body::-webkit-scrollbar { width: 3px; }
 .panel-body::-webkit-scrollbar-track { background: transparent; }
 .panel-body::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 2px; }
+.scroll-btn {
+  position: absolute;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: all 0.2s;
+  opacity: 0;
+  pointer-events: none;
+}
+.scroll-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+.scroll-btn.scroll-up   { bottom: 38px; }
+.scroll-btn.scroll-down { bottom: 10px; }
+.panel:hover .scroll-btn { opacity: 1; pointer-events: all; }
 
 /* ── Top bar ── */
 #topbar {
@@ -1105,6 +1128,8 @@ function initWindowManager() {
 function init() {
   initWindowManager();
   startClock();
+  addScrollButtons(document.getElementById('tasks-panel'));
+  addScrollButtons(document.getElementById('rpp-panel'));
   applyGif(localStorage.getItem(LS_KEYS.GIF) || '');
   applyTitle(localStorage.getItem(LS_KEYS.TITLE) || 'Dashboard');
   renderShortcuts();
@@ -1875,6 +1900,22 @@ function formatRppDate(ts) {
 // ─────────────────────────────────────────────
 function show(id) { document.getElementById(id).classList.remove('hidden'); }
 function hide(id) { document.getElementById(id).classList.add('hidden'); }
+
+function addScrollButtons(panel) {
+  const body = panel.querySelector('.panel-body');
+  if (!body) return;
+  panel.style.position = 'relative';
+  const up   = document.createElement('button');
+  const down = document.createElement('button');
+  up.className   = 'scroll-btn scroll-up';
+  down.className = 'scroll-btn scroll-down';
+  up.textContent   = '▲';
+  down.textContent = '▼';
+  up.addEventListener('click',   () => body.scrollBy({ top: -80, behavior: 'smooth' }));
+  down.addEventListener('click', () => body.scrollBy({ top:  80, behavior: 'smooth' }));
+  panel.appendChild(up);
+  panel.appendChild(down);
+}
 
 function escHtml(str) {
   return String(str)
