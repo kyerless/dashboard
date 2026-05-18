@@ -685,11 +685,12 @@ html, body {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
-  align-items: center;
+  align-items: stretch;
   gap: 7px;
   overflow-x: auto;
   flex: 1;
-  padding: 6px 0;
+  padding: 4px 0;
+  align-self: stretch;
 }
 .shortcut-grid::-webkit-scrollbar       { height: 3px; }
 .shortcut-grid::-webkit-scrollbar-track { background: transparent; }
@@ -697,7 +698,8 @@ html, body {
 .shortcut-tile {
   flex-shrink: 0;
   width: 84px;
-  min-height: 60px;
+  min-height: unset;
+  height: 100%;
 }
 .sc-add-btn {
   flex-shrink: 0;
@@ -844,6 +846,11 @@ html, body {
       <div class="form-hint">Paste any direct GIF or image URL. Leave blank to use the default animated gradient.</div>
     </div>
     <div class="form-group">
+      <label>Root Folder Path</label>
+      <input class="form-input" id="set-rpp-root" type="text" placeholder="C:/Users/kyer/Music/YR" />
+      <div class="form-hint">The full path to your picked folder. Used to open .rpp files directly in REAPER.</div>
+    </div>
+    <div class="form-group">
       <label>Todoist API Token</label>
       <input class="form-input" id="set-token" type="password" placeholder="Leave blank to keep current" />
       <div class="form-hint">Only fill this to change your token. <a href="https://todoist.com/app/settings/integrations/developer" target="_blank">Get token →</a></div>
@@ -895,6 +902,7 @@ const LS_KEYS = {
   GIF:       'dash_gif',
   TITLE:     'dash_title',
   WINDOWS:   'dash_windows',
+  RPP_ROOT:  'dash_rpp_root',
 };
 
 // ─────────────────────────────────────────────
@@ -1141,7 +1149,7 @@ async function loadTasks() {
   try {
     const data = await apiCall('/tasks');
     tasks = Array.isArray(data) ? data : (data.results ?? []);
-    tasks.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    tasks.sort((a, b) => new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0));
     renderTasks();
     const n = tasks.length;
     setStatus('ok', `${n} task${n !== 1 ? 's' : ''}`);
@@ -1502,9 +1510,10 @@ function saveShortcut() {
 // Settings
 // ─────────────────────────────────────────────
 function openSettings() {
-  document.getElementById('set-gif').value   = localStorage.getItem(LS_KEYS.GIF)   || '';
-  document.getElementById('set-title').value = localStorage.getItem(LS_KEYS.TITLE) || '';
-  document.getElementById('set-token').value = '';
+  document.getElementById('set-gif').value      = localStorage.getItem(LS_KEYS.GIF)      || '';
+  document.getElementById('set-title').value    = localStorage.getItem(LS_KEYS.TITLE)    || '';
+  document.getElementById('set-rpp-root').value = localStorage.getItem(LS_KEYS.RPP_ROOT) || '';
+  document.getElementById('set-token').value    = '';
   show('settings-modal');
 }
 
@@ -1514,9 +1523,11 @@ function saveSettings() {
   const gif      = document.getElementById('set-gif').value.trim();
   const title    = document.getElementById('set-title').value.trim();
   const newToken = document.getElementById('set-token').value.trim();
+  const rppRoot  = document.getElementById('set-rpp-root').value.trim().replace(/\\/g, '/').replace(/\/$/, '');
 
-  localStorage.setItem(LS_KEYS.GIF,   gif);
-  localStorage.setItem(LS_KEYS.TITLE, title || 'Dashboard');
+  localStorage.setItem(LS_KEYS.GIF,      gif);
+  localStorage.setItem(LS_KEYS.TITLE,    title || 'Dashboard');
+  localStorage.setItem(LS_KEYS.RPP_ROOT, rppRoot);
 
   if (newToken) {
     TOKEN = newToken;
@@ -1747,22 +1758,14 @@ function renderRppFiles(files) {
 }
 
 async function openRppFile(path) {
-  const handle = rppFileHandles[path];
-  if (!handle) { alert('File handle lost. Try rescanning.'); return; }
-  try {
-    const file = await handle.getFile();
-    const url  = URL.createObjectURL(file);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = file.name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-  } catch (e) {
-    console.error('[openRppFile]', e);
-    alert('Could not open file: ' + e.message);
+  const root = localStorage.getItem(LS_KEYS.RPP_ROOT) || '';
+  if (!root) {
+    alert('Set your Root Folder Path in Settings first.\nExample: C:/Users/kyer/Music/YR');
+    return;
   }
+  const fullPath   = root + '/' + path;
+  const reaperLink = 'reaper:///' + fullPath;
+  window.location.href = reaperLink;
 }
 
 function renderRppError(msg) {
