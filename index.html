@@ -567,6 +567,25 @@ html, body {
   border-color: var(--accent);
   background: var(--accent-dim);
 }
+.drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  background: var(--glass);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--text);
+  opacity: 0.9;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: translate(-50%, -110%);
+  transition: none;
+}
 .task-item.drag-over {
   border-color: var(--accent-2);
   background: rgba(184,122,238,0.08);
@@ -1400,8 +1419,14 @@ list.querySelectorAll('.task-item').forEach(row => {
     e.preventDefault();
     dragSrc = row;
     row.classList.add('dragging');
+    const ghost = document.createElement('div');
+    ghost.className = 'drag-ghost';
+    ghost.textContent = row.querySelector('.task-content').textContent;
+    document.body.appendChild(ghost);
     function onMove(e) {
       if (!dragSrc) return;
+      ghost.style.left = e.clientX + 'px';
+      ghost.style.top  = e.clientY + 'px';
       const items = [...list.querySelectorAll('.task-item:not(.dragging)')];
       items.forEach(r => r.classList.remove('drag-over'));
       const target = items.find(r => {
@@ -1413,6 +1438,7 @@ list.querySelectorAll('.task-item').forEach(row => {
     function onUp() {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      ghost.remove();
       const target = list.querySelector('.task-item.drag-over');
       list.querySelectorAll('.task-item').forEach(r =>
         r.classList.remove('dragging', 'drag-over')
