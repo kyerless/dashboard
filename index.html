@@ -667,8 +667,9 @@ html, body {
   flex: 1;
   display: flex;
   justify-content: center;
-  align-items: stretch;
+  align-items: center;
   overflow: hidden;
+  gap: 7px;
 }
 .sc-drag-bar {
   width: 26px;
@@ -698,6 +699,7 @@ html, body {
   flex: none;
   padding: 4px 0;
   align-self: stretch;
+  max-width: calc(100% - 60px);
 }
 .shortcut-grid::-webkit-scrollbar       { height: 3px; }
 .shortcut-grid::-webkit-scrollbar-track { background: transparent; }
@@ -1762,7 +1764,17 @@ function renderRppFiles(files) {
   }).join('');
 
   list.querySelectorAll('.rpp-item').forEach(item => {
-    item.addEventListener('dblclick', () => openRppFile(item.dataset.path));
+    item.addEventListener('click', () => {
+      const root      = localStorage.getItem(LS_KEYS.RPP_ROOT) || '';
+      const filePath  = item.dataset.path;
+      const folderRel = filePath.includes('/')
+        ? filePath.substring(0, filePath.lastIndexOf('/'))
+        : '';
+      const fullFolder = root
+        ? root + (folderRel ? '/' + folderRel : '')
+        : folderRel;
+      window.location.href = 'explore:///' + fullFolder;
+    });
   });
 }
 
