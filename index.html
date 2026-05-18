@@ -1384,7 +1384,7 @@ function renderTasks() {
   const done   = tasks.filter(t =>  t._done);
   const sorted = [...active, ...done];
   list.innerHTML = sorted.map((t, i) => `
-    <div class="task-item${t._done ? ' task-done' : ''}" data-id="${t.id}" draggable="${!t._done}">
+    <div class="task-item${t._done ? ' task-done' : ''}" data-id="${t.id}">
       <div class="task-check${t._done ? ' done' : ''}" onclick="${t._done ? `reopenTask('${t.id}')` : `completeTask('${t.id}')`}" title="${t._done ? 'Click to reopen' : 'Mark complete'}" style="${t._done ? 'cursor:pointer; pointer-events:auto;' : ''}">${t._done ? '✓' : ''}</div>
       <div class="task-content" ondblclick="${t._done ? '' : `editTask('${t.id}')`}" title="${t._done ? '' : 'Double-click to edit'}">${escHtml(t.content)}</div>
       <button class="task-del" onclick="deleteTask('${t.id}')" title="Delete task">✕</button>
@@ -1393,39 +1393,47 @@ function renderTasks() {
   `).join('');
 
   let dragSrc = null;
-  list.querySelectorAll('.task-item').forEach(row => {
-    row.addEventListener('dragstart', e => {
-      dragSrc = row;
-      row.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-    });
-    row.addEventListener('dragend', () => {
-      list.querySelectorAll('.task-item').forEach(r => {
-        r.classList.remove('dragging', 'drag-over');
+list.querySelectorAll('.task-item').forEach(row => {
+  if (row.classList.contains('task-done')) return;
+  row.addEventListener('mousedown', e => {
+    if (e.target.closest('button, input, .task-check')) return;
+    e.preventDefault();
+    dragSrc = row;
+    row.classList.add('dragging');
+    function onMove(e) {
+      if (!dragSrc) return;
+      const items = [...list.querySelectorAll('.task-item:not(.dragging)')];
+      items.forEach(r => r.classList.remove('drag-over'));
+      const target = items.find(r => {
+        const rect = r.getBoundingClientRect();
+        return e.clientY >= rect.top && e.clientY <= rect.bottom;
       });
-    });
-    row.addEventListener('dragover', e => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      if (row !== dragSrc) {
-        list.querySelectorAll('.task-item').forEach(r => r.classList.remove('drag-over'));
-        row.classList.add('drag-over');
+      if (target) target.classList.add('drag-over');
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      const target = list.querySelector('.task-item.drag-over');
+      list.querySelectorAll('.task-item').forEach(r =>
+        r.classList.remove('dragging', 'drag-over')
+      );
+      if (target && dragSrc !== target) {
+        const fromId  = dragSrc.dataset.id;
+        const toId    = target.dataset.id;
+        const fromIdx = tasks.findIndex(t => t.id === fromId);
+        const toIdx   = tasks.findIndex(t => t.id === toId);
+        const [moved] = tasks.splice(fromIdx, 1);
+        tasks.splice(toIdx, 0, moved);
+        renderTasks();
+        setStatus('loading', 'Saving order...');
+        syncReorder();
       }
-    });
-    row.addEventListener('drop', e => {
-      e.preventDefault();
-      if (!dragSrc || dragSrc === row) return;
-      const fromId = dragSrc.dataset.id;
-      const toId   = row.dataset.id;
-      const fromIdx = tasks.findIndex(t => t.id === fromId);
-      const toIdx   = tasks.findIndex(t => t.id === toId);
-      const [moved] = tasks.splice(fromIdx, 1);
-      tasks.splice(toIdx, 0, moved);
-      renderTasks();
-      setStatus('loading', 'Saving order...');
-      syncReorder();
-    });
+      dragSrc = null;
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
   });
+});
 }
 
 function renderTasksError() {
