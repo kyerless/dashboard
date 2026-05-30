@@ -1903,7 +1903,7 @@ function hide(id) { document.getElementById(id).classList.add('hidden'); }
 
 function openShortcut(e, url) {
   e.preventDefault();
-  window.open(url, '_blank');
+  window.location.href = url;
 }
 
 function addScrollButtons(panel) {
