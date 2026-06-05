@@ -948,6 +948,7 @@ html, body {
       <input class="form-input" id="sc-url" type="url" placeholder="https://github.com" />
     </div>
     <div class="modal-actions">
+      <button class="btn btn-danger" id="sc-del-btn" onclick="deleteShortcutFromModal()" style="display:none; margin-right:auto;">Remove</button>
       <button class="btn btn-ghost" onclick="closeShortcutModal()">Cancel</button>
       <button class="btn btn-primary" id="sc-save-btn" onclick="saveShortcut()">Add Shortcut</button>
     </div>
@@ -1515,7 +1516,6 @@ function renderShortcuts() {
       }
       <span class="shortcut-label">${escHtml(s.label)}</span>
       <button class="shortcut-edit" onclick="openEditShortcutModal(event, ${i})" title="Edit">✎</button>
-      <button class="shortcut-del"  onclick="removeShortcut(event, ${i})"        title="Remove">✕</button>
     </a>
   `).join('');
 
@@ -1576,6 +1576,7 @@ function openShortcutModal() {
   editingShortcutIdx = null;
   document.getElementById('sc-modal-title').textContent = '+ Add Shortcut';
   document.getElementById('sc-save-btn').textContent    = 'Add Shortcut';
+  document.getElementById('sc-del-btn').style.display   = 'none';
   document.getElementById('sc-emoji').value = '';
   document.getElementById('sc-img').value   = '';
   document.getElementById('sc-label').value = '';
@@ -1589,6 +1590,7 @@ function openEditShortcutModal(e, i) {
   editingShortcutIdx = i;
   document.getElementById('sc-modal-title').textContent = '✎ Edit Shortcut';
   document.getElementById('sc-save-btn').textContent    = 'Save Changes';
+  document.getElementById('sc-del-btn').style.display   = '';
   document.getElementById('sc-emoji').value = s.emoji || '🔗';
   document.getElementById('sc-img').value   = s.img   || '';
   document.getElementById('sc-label').value = s.label || '';
@@ -1597,6 +1599,15 @@ function openEditShortcutModal(e, i) {
 }
   
 function closeShortcutModal() { hide('shortcut-modal'); }
+
+function deleteShortcutFromModal() {
+  if (editingShortcutIdx === null) return;
+  shortcuts.splice(editingShortcutIdx, 1);
+  editingShortcutIdx = null;
+  persistShortcuts();
+  renderShortcuts();
+  closeShortcutModal();
+}
 
 function saveShortcut() {
   const emoji = document.getElementById('sc-emoji').value.trim() || '🔗';
