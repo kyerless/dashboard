@@ -1310,15 +1310,9 @@ async function deleteTask(id) {
 // ─────────────────────────────────────────────
 // Task Sort
 // ─────────────────────────────────────────────
+// AFTER
 function applyTaskSort() {
-  const now = Date.now();
   tasks.sort((a, b) => {
-    const rawA = a.created_at ? new Date(a.created_at).getTime() : NaN;
-    const rawB = b.created_at ? new Date(b.created_at).getTime() : NaN;
-    const ta = Number.isFinite(rawA) ? rawA : now;
-    const tb = Number.isFinite(rawB) ? rawB : now;
-    const diff = ta - tb;
-    if (diff !== 0) return taskSort === 'asc' ? diff : -diff;
     const ia = parseInt(a.id, 10) || 0;
     const ib = parseInt(b.id, 10) || 0;
     return taskSort === 'asc' ? ia - ib : ib - ia;
