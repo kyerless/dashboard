@@ -1382,7 +1382,6 @@ async function addTask() {
   input.focus();
 
   const tempId   = 'tmp-' + Date.now();
-  const tempId   = 'tmp-' + Date.now();
   const tempTask = { id: tempId, content };
   tsMap[tempId]  = new Date().toISOString();   // stamp immediately
   if (taskSort === 'asc') tasks.push(tempTask);
