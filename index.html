@@ -1242,8 +1242,9 @@ async function addTask() {
   input.focus();
 
   const tempId   = 'tmp-' + Date.now();
-  const tempTask = { id: tempId, content };
+  const tempTask = { id: tempId, content, created_at: new Date().toISOString() };
   tasks.unshift(tempTask);
+  applyTaskSort();
   renderTasks();
   const n = tasks.length;
   setStatus('ok', `${n} task${n !== 1 ? 's' : ''}`);
@@ -1253,6 +1254,7 @@ async function addTask() {
     const real = await apiCall('/tasks', 'POST', { content });
     const idx  = tasks.findIndex(t => t.id === tempId);
     if (idx !== -1) tasks[idx] = real;
+    applyTaskSort();
     renderTasks();
   } catch (e) {
     tasks = tasks.filter(t => t.id !== tempId);
