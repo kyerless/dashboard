@@ -1270,7 +1270,7 @@ async function init() {
   renderShortcuts();
   updateSortBtn();
   tryRestoreRppFolder();
-  await initTsStore();
+  try { await initTsStore(); } catch (_) {}
   if (!TOKEN) {
     show('setup-screen');
     setStatus('', '—');
@@ -1824,12 +1824,13 @@ function disconnectTodoist() {
 // ─────────────────────────────────────────────
 // Setup screen
 // ─────────────────────────────────────────────
-function saveSetupToken() {
+async function saveSetupToken() {
   const t = document.getElementById('setup-token').value.trim();
   if (!t) { alert('Please paste your Todoist API token.'); return; }
   TOKEN = t;
   localStorage.setItem(LS_KEYS.TOKEN, TOKEN);
   hide('setup-screen');
+  try { await initTsStore(); } catch (_) {}
   loadTasks();
 }
 
