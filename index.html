@@ -1218,8 +1218,8 @@ async function loadTasks() {
   setStatus('loading', 'Syncing...');
   try {
     const data = await apiCall('/tasks');
-    tasks = Array.isArray(data) ? data : (data.results ?? []);
-    applyTaskSort();
+    const raw = Array.isArray(data) ? data : (data.results ?? []);
+    tasks = taskSort === 'asc' ? [...raw].reverse() : raw;
     renderTasks();
     const n = tasks.length;
     setStatus('ok', `${n} task${n !== 1 ? 's' : ''}`);
@@ -1242,9 +1242,9 @@ async function addTask() {
   input.focus();
 
   const tempId   = 'tmp-' + Date.now();
-  const tempTask = { id: tempId, content, created_at: new Date().toISOString() };
-  tasks.unshift(tempTask);
-  applyTaskSort();
+  const tempTask = { id: 'tmp-' + Date.now(), content };
+  if (taskSort === 'asc') tasks.push(tempTask);
+  else tasks.unshift(tempTask);
   renderTasks();
   const n = tasks.length;
   setStatus('ok', `${n} task${n !== 1 ? 's' : ''}`);
@@ -1311,19 +1311,16 @@ async function deleteTask(id) {
 // Task Sort
 // ─────────────────────────────────────────────
 // AFTER
+// AFTER
 function applyTaskSort() {
-  tasks.sort((a, b) => {
-    const ia = parseInt(a.id, 10) || 0;
-    const ib = parseInt(b.id, 10) || 0;
-    return taskSort === 'asc' ? ia - ib : ib - ia;
-  });
+  if (taskSort === 'asc') tasks.reverse();
 }
 
 function toggleSort() {
   taskSort = taskSort === 'desc' ? 'asc' : 'desc';
   localStorage.setItem(LS_KEYS.SORT, taskSort);
   updateSortBtn();
-  applyTaskSort();
+  tasks.reverse();
   renderTasks();
 }
 
