@@ -969,6 +969,7 @@ const LS_KEYS = {
   WINDOWS:   'dash_windows',
   RPP_ROOT:  'dash_rpp_root',
   SORT:      'dash_sort',
+  TS_FILE:   'dash_ts_file_saved',
 };
 
 // ─────────────────────────────────────────────
@@ -980,6 +981,138 @@ let shortcuts          = JSON.parse(localStorage.getItem(LS_KEYS.SHORTCUTS) || '
 let editingShortcutIdx = null;
 let taskSort = localStorage.getItem(LS_KEYS.SORT) || 'desc';
 
+// ── Timestamp store ──
+let tsFileHandle = null;   // FileSystemFileHandle for dash-tasks.json
+let tsMap        = {};     // { [taskId]: ISO string }
+
+  // ─────────────────────────────────────────────
+// Timestamp store  (dash-tasks.json in user's chosen folder)
+// ─────────────────────────────────────────────
+const TS_FILENAME = 'dash-tasks.json';
+
+async function saveTsFileHandle(handle) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('handles', 'readwrite');
+    tx.objectStore('handles').put(handle, 'ts-file');
+    tx.oncomplete = resolve;
+    tx.onerror    = () => reject(tx.error);
+  });
+}
+
+async function loadTsFileHandle() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx  = db.transaction('handles', 'readonly');
+    const req = tx.objectStore('handles').get('ts-file');
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+async function readTsFile() {
+  if (!tsFileHandle) return;
+  try {
+    const file = await tsFileHandle.getFile();
+    const text = await file.text();
+    tsMap = JSON.parse(text);
+  } catch (_) {
+    tsMap = {};
+  }
+}
+
+async function writeTsFile() {
+  if (!tsFileHandle) return;
+  try {
+    const writable = await tsFileHandle.createWritable();
+    await writable.write(JSON.stringify(tsMap, null, 2));
+    await writable.close();
+  } catch (e) {
+    console.warn('[writeTsFile]', e);
+  }
+}
+
+async function stampTask(id) {
+  if (tsMap[id]) return;           // already has a timestamp
+  tsMap[id] = new Date().toISOString();
+  await writeTsFile();
+}
+
+async function pruneTsMap(liveTasks) {
+  const liveIds = new Set(liveTasks.map(t => String(t.id)));
+  let changed = false;
+  Object.keys(tsMap).forEach(k => {
+    if (!liveIds.has(k)) { delete tsMap[k]; changed = true; }
+  });
+  if (changed) await writeTsFile();
+}
+
+// Try to restore the ts file handle on load, ask user if missing
+async function initTsStore() {
+  try {
+    const saved = await loadTsFileHandle();
+    if (saved) {
+      const perm = await saved.queryPermission({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        tsFileHandle = saved;
+        await readTsFile();
+        return;
+      }
+    }
+  } catch (_) {}
+  // No handle yet — silently wait; pickTsFolder() is called from the prompt banner
+}
+
+async function pickTsFolder() {
+  if (!window.showDirectoryPicker) return;
+  try {
+    const dir    = await window.showDirectoryPicker({ mode: 'readwrite' });
+    tsFileHandle = await dir.getFileHandle(TS_FILENAME, { create: true });
+    await saveTsFileHandle(tsFileHandle);
+    await readTsFile();
+    hideTsBanner();
+    // Stamp any already-loaded tasks that have no entry yet
+    for (const t of tasks) await stampTask(String(t.id));
+    applyTaskSort();
+    renderTasks();
+  } catch (e) {
+    if (e.name !== 'AbortError') console.error('[pickTsFolder]', e);
+  }
+}
+
+function showTsBanner() {
+  let b = document.getElementById('ts-banner');
+  if (b) return;
+  b = document.createElement('div');
+  b.id = 'ts-banner';
+  b.style.cssText = `
+    position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
+    z-index:9999; background:var(--glass); border:1px solid var(--accent);
+    border-radius:var(--radius); padding:12px 20px; display:flex;
+    align-items:center; gap:14px; font-size:14px; color:var(--text);
+    box-shadow:0 8px 32px rgba(0,0,0,0.5);
+  `;
+  b.innerHTML = `
+    <span>📂 Pick a folder to save your task timestamps (<code>${TS_FILENAME}</code>)</span>
+    <button onclick="pickTsFolder()"
+      style="background:var(--accent);border:none;border-radius:var(--radius-sm);
+             padding:6px 14px;font-family:'Syne',sans-serif;font-weight:700;
+             font-size:13px;color:#08041a;cursor:pointer;">
+      Pick Folder
+    </button>
+    <button onclick="hideTsBanner()"
+      style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:0 4px;">
+      ✕
+    </button>
+  `;
+  document.body.appendChild(b);
+}
+
+function hideTsBanner() {
+  const b = document.getElementById('ts-banner');
+  if (b) b.remove();
+}
+  
 // ─────────────────────────────────────────────
 // Window Manager
 // ─────────────────────────────────────────────
@@ -1127,7 +1260,7 @@ function initWindowManager() {
 // ─────────────────────────────────────────────
 // Init
 // ─────────────────────────────────────────────
-function init() {
+async function init() {
   initWindowManager();
   startClock();
   addScrollButtons(document.getElementById('tasks-panel'));
@@ -1137,6 +1270,7 @@ function init() {
   renderShortcuts();
   updateSortBtn();
   tryRestoreRppFolder();
+  await initTsStore();
   if (!TOKEN) {
     show('setup-screen');
     setStatus('', '—');
@@ -1218,12 +1352,18 @@ async function loadTasks() {
   setStatus('loading', 'Syncing...');
   try {
     const data = await apiCall('/tasks');
-    const raw = Array.isArray(data) ? data : (data.results ?? []);
-    tasks = taskSort === 'asc' ? [...raw].reverse() : raw;
+    tasks = Array.isArray(data) ? data : (data.results ?? []);
+    // Stamp any tasks not yet in our file
+    if (tsFileHandle) {
+      for (const t of tasks) await stampTask(String(t.id));
+      await pruneTsMap(tasks);
+    } else {
+      showTsBanner();
+    }
+    applyTaskSort();
     renderTasks();
     const n = tasks.length;
     setStatus('ok', `${n} task${n !== 1 ? 's' : ''}`);
-    
   } catch (e) {
     setStatus('err', 'Sync failed');
     renderTasksError();
@@ -1242,7 +1382,9 @@ async function addTask() {
   input.focus();
 
   const tempId   = 'tmp-' + Date.now();
-  const tempTask = { id: 'tmp-' + Date.now(), content };
+  const tempId   = 'tmp-' + Date.now();
+  const tempTask = { id: tempId, content };
+  tsMap[tempId]  = new Date().toISOString();   // stamp immediately
   if (taskSort === 'asc') tasks.push(tempTask);
   else tasks.unshift(tempTask);
   renderTasks();
@@ -1252,9 +1394,12 @@ async function addTask() {
 
   try {
     const real = await apiCall('/tasks', 'POST', { content });
-    const idx  = tasks.findIndex(t => t.id === tempId);
+    const ts   = tsMap[tempId];           // carry the temp's stamp over
+    delete tsMap[tempId];
+    tsMap[String(real.id)] = ts || new Date().toISOString();
+    await writeTsFile();
+    const idx = tasks.findIndex(t => t.id === tempId);
     if (idx !== -1) tasks[idx] = real;
-    applyTaskSort();
     renderTasks();
   } catch (e) {
     tasks = tasks.filter(t => t.id !== tempId);
@@ -1313,14 +1458,18 @@ async function deleteTask(id) {
 // AFTER
 // AFTER
 function applyTaskSort() {
-  if (taskSort === 'asc') tasks.reverse();
+  tasks.sort((a, b) => {
+    const ta = tsMap[String(a.id)] ? new Date(tsMap[String(a.id)]).getTime() : 0;
+    const tb = tsMap[String(b.id)] ? new Date(tsMap[String(b.id)]).getTime() : 0;
+    return taskSort === 'desc' ? tb - ta : ta - tb;
+  });
 }
 
 function toggleSort() {
   taskSort = taskSort === 'desc' ? 'asc' : 'desc';
   localStorage.setItem(LS_KEYS.SORT, taskSort);
   updateSortBtn();
-  tasks.reverse();
+  applyTaskSort();
   renderTasks();
 }
 
