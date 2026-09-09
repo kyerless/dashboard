@@ -2456,23 +2456,7 @@ function renderRecentFiles(files) {
   `;
 }
   
-function openRecentFile(path) {
-
-  const root =
-    localStorage.getItem(
-      LS_KEYS.RPP_ROOT
-    ) || '';
-
-  if (!root) {
-    alert(
-      'Set your Recent Files Folder in Settings (⚙) first.'
-    );
-
-    return;
-  }
-
-  const fullPath =
-    root + '/' + path;
+async function openRecentFile(path) {
 
   const extension =
     path
@@ -2481,14 +2465,31 @@ function openRecentFile(path) {
         path.lastIndexOf('.')
       );
 
-  // REAPER projects
+  // ─────────────────────────────────────────
+  // REAPER PROJECTS
+  // ─────────────────────────────────────────
   if (extension === '.rpp') {
+
+    const root =
+      localStorage.getItem(
+        LS_KEYS.RPP_ROOT
+      ) || '';
+
+    if (!root) {
+      alert(
+        'Set your Recent Files Folder in Settings (⚙) first.\n\n' +
+        'This is required so Windows/Reaper knows the actual project path.'
+      );
+
+      return;
+    }
+
+    const fullPath =
+      root + '/' + path;
 
     const reaperUrl =
       'reaper:///' +
-      encodeURIComponent(
-        fullPath
-      );
+      encodeURIComponent(fullPath);
 
     window.location.href =
       reaperUrl;
@@ -2496,11 +2497,108 @@ function openRecentFile(path) {
     return;
   }
 
-  // Other files
-  alert(
-    'The browser cannot directly open arbitrary Windows files by filesystem path.\n\n' +
-    'A local helper application would be needed for direct opening of documents.'
-  );
+  // ─────────────────────────────────────────
+  // OTHER FILES
+  // ─────────────────────────────────────────
+
+  const handle =
+    recentFileHandles[path];
+
+  if (!handle) {
+    alert(
+      'The file handle is no longer available.\n\n' +
+      'Please rescan the folder.'
+    );
+
+    return;
+  }
+
+  try {
+
+    // Make sure we still have permission
+    let permission =
+      await handle.queryPermission({
+        mode: 'read'
+      });
+
+    if (permission !== 'granted') {
+
+      permission =
+        await handle.requestPermission({
+          mode: 'read'
+        });
+
+      if (permission !== 'granted') {
+        alert(
+          'Permission to open this file was not granted.'
+        );
+
+        return;
+      }
+    }
+
+    // Get the actual file
+    const file =
+      await handle.getFile();
+
+    // Create a temporary browser URL
+    const url =
+      URL.createObjectURL(file);
+
+    // File types that browsers can normally display
+    const browserOpenTypes = [
+      '.pdf',
+      '.txt',
+      '.csv',
+      '.json',
+      '.xml',
+      '.md',
+      '.rtf'
+    ];
+
+    if (browserOpenTypes.includes(extension)) {
+
+      window.open(
+        url,
+        '_blank'
+      );
+
+      // Give the new tab time to load the object URL
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 60000);
+
+      return;
+    }
+
+    // Office / OpenDocument files
+    // Browser can't reliably open these natively.
+    const download =
+      document.createElement('a');
+
+    download.href = url;
+    download.download = file.name;
+
+    document.body.appendChild(download);
+    download.click();
+    download.remove();
+
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 10000);
+
+  } catch (e) {
+
+    console.error(
+      '[openRecentFile]',
+      e
+    );
+
+    alert(
+      'Could not open this file.\n\n' +
+      e.message
+    );
+  }
 }
 
 function formatRppDate(ts) {
