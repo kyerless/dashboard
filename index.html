@@ -872,22 +872,30 @@ html, body {
     <!-- Recent RPP Projects -->
     <div class="panel win" id="rpp-panel">
       <div class="panel-header">
-        <span>Recent Projects</span>
-        <button class="icon-btn" title="Rescan" onclick="scanRppFiles()" style="font-size:14px;">↻</button>
-      </div>
+      <span id="recent-files-title">Recent REAPER Projects</span>
+    
+      <button
+        class="icon-btn"
+        title="Rescan"
+        onclick="scanRecentFiles()"
+        style="font-size:14px;"
+      >
+        ↻
+      </button>
+    </div>
       <div class="panel-body">
         <div id="rpp-folder-bar" class="hidden">
           <span id="rpp-folder-name" style="font-size:13px; color:var(--accent); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;"></span>
-          <button onclick="changeRppFolder()" title="Change folder"
+          <button onclick="changeRecentFolder()" title="Change folder"
             style="flex-shrink:0; background:none; color:var(--muted); font-size:12px; cursor:pointer; padding:2px 8px; border-radius:4px; border:1px solid var(--glass-border);">
             Change
           </button>
         </div>
-        <button class="rpp-pick-btn" id="rpp-pick-btn" onclick="pickRppFolder()">📁 Pick Folder</button>
+        <button class="rpp-pick-btn" id="rpp-pick-btn" onclick="pickRecentFolder()">📁 Pick Folder</button>
         <div id="rpp-list">
           <div class="empty-state">
             <div class="icon">🎵</div>
-            Pick a folder above to scan<br>for .rpp project files.
+            Pick a folder above to scan<br>for recent files.
           </div>
         </div>
       </div>
@@ -910,10 +918,32 @@ html, body {
       <div class="form-hint">Paste any direct GIF or image URL. Leave blank to use the default animated gradient.</div>
     </div>
     <div class="form-group">
-      <label>Root Folder Path</label>
-      <input class="form-input" id="set-rpp-root" type="text" placeholder="C:/Users/kyer/Music/YR" />
-      <div class="form-hint">The full path to your picked folder. Used to open .rpp files directly in REAPER.</div>
-    </div>
+  <label>Recent Files Folder</label>
+
+  <input
+    class="form-input"
+    id="set-rpp-root"
+    type="text"
+    placeholder="C:/Users/kyer/Music/YR"
+  />
+
+  <div class="form-hint">
+    Folder used for Recent Files scanning and opening REAPER projects.
+  </div>
+</div>
+<div class="form-group">
+  <label>Recent Files Type</label>
+
+  <select class="form-input" id="set-recent-mode">
+    <option value="rpp">REAPER Projects (.rpp)</option>
+    <option value="documents">Documents</option>
+    <option value="all">All Supported Files</option>
+  </select>
+
+  <div class="form-hint">
+    Controls which file types appear in the Recent Files panel.
+  </div>
+</div>
     <div class="form-group">
       <label>Todoist API Token</label>
       <input class="form-input" id="set-token" type="password" placeholder="Leave blank to keep current" />
@@ -962,16 +992,88 @@ html, body {
 const TODOIST_BASE = 'https://rapid-flower-9f48.kiermichaelm.workers.dev';
 
 const LS_KEYS = {
-  TOKEN:     'dash_token',
-  SHORTCUTS: 'dash_shortcuts',
-  GIF:       'dash_gif',
-  TITLE:     'dash_title',
-  WINDOWS:   'dash_windows',
-  RPP_ROOT:  'dash_rpp_root',
-  SORT:      'dash_sort',
-  TS_FILE:   'dash_ts_file_saved',
+  TOKEN:        'dash_token',
+  SHORTCUTS:    'dash_shortcuts',
+  GIF:          'dash_gif',
+  TITLE:        'dash_title',
+  WINDOWS:      'dash_windows',
+  RPP_ROOT:     'dash_rpp_root',
+  SORT:         'dash_sort',
+
+  // Recent Files
+  RECENT_MODE:  'dash_recent_mode',
+
 };
 
+const RECENT_FILE_TYPES = {
+  rpp: [
+    '.rpp'
+  ],
+
+  documents: [
+    '.txt',
+    '.doc',
+    '.docx',
+    '.pdf',
+    '.xls',
+    '.xlsx',
+    '.csv',
+    '.ppt',
+    '.pptx',
+    '.md',
+    '.rtf',
+    '.odt',
+    '.ods',
+    '.odp',
+    '.json',
+    '.xml'
+  ]
+};
+
+function getRecentFileMode() {
+  return localStorage.getItem(LS_KEYS.RECENT_MODE) || 'rpp';
+}
+
+function getRecentExtensions() {
+  const mode = getRecentFileMode();
+
+  if (mode === 'documents') {
+    return RECENT_FILE_TYPES.documents;
+  }
+
+  if (mode === 'all') {
+    return [
+      ...RECENT_FILE_TYPES.rpp,
+      ...RECENT_FILE_TYPES.documents
+    ];
+  }
+
+  return RECENT_FILE_TYPES.rpp;
+}
+
+function getRecentFilesTitle() {
+  const mode = getRecentFileMode();
+
+  if (mode === 'documents') {
+    return 'Recent Documents';
+  }
+
+  if (mode === 'all') {
+    return 'Recent Files';
+  }
+
+  return 'Recent REAPER Projects';
+}
+
+function updateRecentFilesTitle() {
+  const title =
+    document.getElementById('recent-files-title');
+
+  if (!title) return;
+
+  title.textContent =
+    getRecentFilesTitle();
+}
 // ─────────────────────────────────────────────
 // State
 // ─────────────────────────────────────────────
@@ -982,135 +1084,86 @@ let editingShortcutIdx = null;
 let taskSort = localStorage.getItem(LS_KEYS.SORT) || 'desc';
 
 // ── Timestamp store ──
-let tsFileHandle = null;   // FileSystemFileHandle for dash-tasks.json
-let tsMap        = {};     // { [taskId]: ISO string }
+// Stores Todoist task timestamps inside browser IndexedDB.
+// No dash-tasks.json file or folder picker is required.
 
-  // ─────────────────────────────────────────────
-// Timestamp store  (dash-tasks.json in user's chosen folder)
-// ─────────────────────────────────────────────
-const TS_FILENAME = 'dash-tasks.json';
+let tsMap = {};
 
-async function saveTsFileHandle(handle) {
+// Load timestamp map from IndexedDB
+async function loadTimestampMap() {
   const db = await openDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('handles', 'readonly');
+
+    const req =
+      tx.objectStore('handles').get('task-timestamps');
+
+    req.onsuccess = () => {
+      resolve(req.result || {});
+    };
+
+    req.onerror = () => {
+      reject(req.error);
+    };
+  });
+}
+
+// Save timestamp map to IndexedDB
+async function saveTimestampMap() {
+  const db = await openDB();
+
   return new Promise((resolve, reject) => {
     const tx = db.transaction('handles', 'readwrite');
-    tx.objectStore('handles').put(handle, 'ts-file');
+
+    tx.objectStore('handles').put(
+      tsMap,
+      'task-timestamps'
+    );
+
     tx.oncomplete = resolve;
-    tx.onerror    = () => reject(tx.error);
+    tx.onerror = () => reject(tx.error);
   });
 }
 
-async function loadTsFileHandle() {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx  = db.transaction('handles', 'readonly');
-    const req = tx.objectStore('handles').get('ts-file');
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror   = () => reject(req.error);
-  });
-}
-
-async function readTsFile() {
-  if (!tsFileHandle) return;
-  try {
-    const file = await tsFileHandle.getFile();
-    const text = await file.text();
-    tsMap = JSON.parse(text);
-  } catch (_) {
-    tsMap = {};
+// Add timestamp to a task if it doesn't have one yet
+function stampTask(id) {
+  if (tsMap[id]) {
+    return false;
   }
-}
 
-async function writeTsFile() {
-  if (!tsFileHandle) return;
-  try {
-    const writable = await tsFileHandle.createWritable();
-    await writable.write(JSON.stringify(tsMap, null, 2));
-    await writable.close();
-  } catch (e) {
-    console.warn('[writeTsFile]', e);
-  }
-}
-
-async function stampTask(id) {
-  if (tsMap[id]) return;           // already has a timestamp
   tsMap[id] = new Date().toISOString();
-  await writeTsFile();
+
+  return true;
 }
 
-async function pruneTsMap(liveTasks) {
-  const liveIds = new Set(liveTasks.map(t => String(t.id)));
+// Remove timestamps for tasks that no longer exist
+function pruneTsMap(liveTasks) {
+  const liveIds =
+    new Set(
+      liveTasks.map(t => String(t.id))
+    );
+
   let changed = false;
-  Object.keys(tsMap).forEach(k => {
-    if (!liveIds.has(k)) { delete tsMap[k]; changed = true; }
+
+  Object.keys(tsMap).forEach(id => {
+    if (!liveIds.has(id)) {
+      delete tsMap[id];
+      changed = true;
+    }
   });
-  if (changed) await writeTsFile();
+
+  return changed;
 }
 
-// Try to restore the ts file handle on load, ask user if missing
+// Load timestamp map when dashboard starts
 async function initTsStore() {
   try {
-    const saved = await loadTsFileHandle();
-    if (saved) {
-      const perm = await saved.queryPermission({ mode: 'readwrite' });
-      if (perm === 'granted') {
-        tsFileHandle = saved;
-        await readTsFile();
-        return;
-      }
-    }
-  } catch (_) {}
-  // No handle yet — silently wait; pickTsFolder() is called from the prompt banner
-}
-
-async function pickTsFolder() {
-  if (!window.showDirectoryPicker) return;
-  try {
-    const dir    = await window.showDirectoryPicker({ mode: 'readwrite' });
-    tsFileHandle = await dir.getFileHandle(TS_FILENAME, { create: true });
-    await saveTsFileHandle(tsFileHandle);
-    await readTsFile();
-    hideTsBanner();
-    // Stamp any already-loaded tasks that have no entry yet
-    for (const t of tasks) await stampTask(String(t.id));
-    applyTaskSort();
-    renderTasks();
+    tsMap = await loadTimestampMap();
   } catch (e) {
-    if (e.name !== 'AbortError') console.error('[pickTsFolder]', e);
+    console.warn('[initTsStore]', e);
+    tsMap = {};
   }
-}
-
-function showTsBanner() {
-  let b = document.getElementById('ts-banner');
-  if (b) return;
-  b = document.createElement('div');
-  b.id = 'ts-banner';
-  b.style.cssText = `
-    position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
-    z-index:9999; background:var(--glass); border:1px solid var(--accent);
-    border-radius:var(--radius); padding:12px 20px; display:flex;
-    align-items:center; gap:14px; font-size:14px; color:var(--text);
-    box-shadow:0 8px 32px rgba(0,0,0,0.5);
-  `;
-  b.innerHTML = `
-    <span>📂 Pick a folder to save your task timestamps (<code>${TS_FILENAME}</code>)</span>
-    <button onclick="pickTsFolder()"
-      style="background:var(--accent);border:none;border-radius:var(--radius-sm);
-             padding:6px 14px;font-family:'Syne',sans-serif;font-weight:700;
-             font-size:13px;color:#08041a;cursor:pointer;">
-      Pick Folder
-    </button>
-    <button onclick="hideTsBanner()"
-      style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:0 4px;">
-      ✕
-    </button>
-  `;
-  document.body.appendChild(b);
-}
-
-function hideTsBanner() {
-  const b = document.getElementById('ts-banner');
-  if (b) b.remove();
 }
   
 // ─────────────────────────────────────────────
@@ -1269,7 +1322,8 @@ async function init() {
   applyTitle(localStorage.getItem(LS_KEYS.TITLE) || 'Dashboard');
   renderShortcuts();
   updateSortBtn();
-  tryRestoreRppFolder();
+  updateRecentFilesTitle();
+  tryRestoreRecentFolder();
   try { await initTsStore(); } catch (_) {}
   if (!TOKEN) {
     show('setup-screen');
@@ -1353,12 +1407,21 @@ async function loadTasks() {
   try {
     const data = await apiCall('/tasks');
     tasks = Array.isArray(data) ? data : (data.results ?? []);
-    // Stamp any tasks not yet in our file
-    if (tsFileHandle) {
-      for (const t of tasks) await stampTask(String(t.id));
-      await pruneTsMap(tasks);
-    } else {
-      showTsBanner();
+    // Stamp new tasks and clean up deleted tasks
+    let timestampChanged = false;
+    
+    for (const t of tasks) {
+      if (stampTask(String(t.id))) {
+        timestampChanged = true;
+      }
+    }
+    
+    if (pruneTsMap(tasks)) {
+      timestampChanged = true;
+    }
+    
+    if (timestampChanged) {
+      await saveTimestampMap();
     }
     applyTaskSort();
     renderTasks();
@@ -1393,14 +1456,21 @@ async function addTask() {
 
   try {
     const real = await apiCall('/tasks', 'POST', { content });
-    const ts   = tsMap[tempId];           // carry the temp's stamp over
+    const ts = tsMap[tempId];
+
     delete tsMap[tempId];
-    tsMap[String(real.id)] = ts || new Date().toISOString();
-    await writeTsFile();
+    
+    tsMap[String(real.id)] =
+      ts || new Date().toISOString();
+    
+    await saveTimestampMap();
     const idx = tasks.findIndex(t => t.id === tempId);
     if (idx !== -1) tasks[idx] = real;
     renderTasks();
   } catch (e) {
+    delete tsMap[tempId];
+    await saveTimestampMap();
+  
     tasks = tasks.filter(t => t.id !== tempId);
     renderTasks();
     setStatus('err', 'Failed to add');
@@ -1442,8 +1512,12 @@ async function deleteTask(id) {
      
   }, 260);
   try {
-    await apiCall(`/tasks/${id}`, 'DELETE');
-  } catch (e) {
+      await apiCall(`/tasks/${id}`, 'DELETE');
+    
+      delete tsMap[String(id)];
+      await saveTimestampMap();
+    
+    } catch (e) {
     tasks = snapshot;
     renderTasks();
     setStatus('err', 'Failed to delete');
@@ -1778,33 +1852,81 @@ function saveShortcut() {
 // Settings
 // ─────────────────────────────────────────────
 function openSettings() {
-  document.getElementById('set-gif').value      = localStorage.getItem(LS_KEYS.GIF)      || '';
-  document.getElementById('set-title').value    = localStorage.getItem(LS_KEYS.TITLE)    || '';
-  document.getElementById('set-rpp-root').value = localStorage.getItem(LS_KEYS.RPP_ROOT) || '';
-  document.getElementById('set-token').value    = '';
+  document.getElementById('set-gif').value =
+    localStorage.getItem(LS_KEYS.GIF) || '';
+
+  document.getElementById('set-title').value =
+    localStorage.getItem(LS_KEYS.TITLE) || '';
+
+  document.getElementById('set-rpp-root').value =
+    localStorage.getItem(LS_KEYS.RPP_ROOT) || '';
+
+  document.getElementById('set-recent-mode').value =
+    getRecentFileMode();
+
+  document.getElementById('set-token').value = '';
+
   show('settings-modal');
 }
 
 function closeSettings() { hide('settings-modal'); }
 
 function saveSettings() {
-  const gif      = document.getElementById('set-gif').value.trim();
-  const title    = document.getElementById('set-title').value.trim();
-  const newToken = document.getElementById('set-token').value.trim();
-  const rppRoot  = document.getElementById('set-rpp-root').value.trim().replace(/\\/g, '/').replace(/\/$/, '');
+  const gif =
+    document.getElementById('set-gif').value.trim();
 
-  localStorage.setItem(LS_KEYS.GIF,      gif);
-  localStorage.setItem(LS_KEYS.TITLE,    title || 'Dashboard');
-  localStorage.setItem(LS_KEYS.RPP_ROOT, rppRoot);
+  const title =
+    document.getElementById('set-title').value.trim();
+
+  const newToken =
+    document.getElementById('set-token').value.trim();
+
+  const rppRoot =
+    document.getElementById('set-rpp-root')
+      .value
+      .trim()
+      .replace(/\\/g, '/')
+      .replace(/\/$/, '');
+
+  const recentMode =
+    document.getElementById('set-recent-mode').value;
+
+  localStorage.setItem(
+    LS_KEYS.GIF,
+    gif
+  );
+
+  localStorage.setItem(
+    LS_KEYS.TITLE,
+    title || 'Dashboard'
+  );
+
+  localStorage.setItem(
+    LS_KEYS.RPP_ROOT,
+    rppRoot
+  );
+
+  localStorage.setItem(
+    LS_KEYS.RECENT_MODE,
+    recentMode
+  );
 
   if (newToken) {
     TOKEN = newToken;
-    localStorage.setItem(LS_KEYS.TOKEN, TOKEN);
+    localStorage.setItem(
+      LS_KEYS.TOKEN,
+      TOKEN
+    );
   }
 
   applyGif(gif);
   applyTitle(title);
+
+  updateRecentFilesTitle();
+
   closeSettings();
+
+  scanRecentFiles();
   loadTasks();
 }
 
@@ -1855,8 +1977,8 @@ document.getElementById('shortcut-modal').addEventListener('click', e => {
 // ─────────────────────────────────────────────
 // Recent RPP Projects
 // ─────────────────────────────────────────────
-let rppDirHandle   = null;
-let rppFileHandles = {};
+let recentDirHandle   = null;
+let recentFileHandles = {};
 
 // ─── IndexedDB: persist directory handle across page loads ───
 function openDB() {
@@ -1868,182 +1990,517 @@ function openDB() {
   });
 }
 
-async function saveRppHandle(handle) {
+async function saveRecentFolderHandle(handle) {
   const db = await openDB();
+
   return new Promise((resolve, reject) => {
     const tx = db.transaction('handles', 'readwrite');
-    tx.objectStore('handles').put(handle, 'rpp-dir');
+
+    tx.objectStore('handles').put(
+      handle,
+      'recent-dir'
+    );
+
     tx.oncomplete = resolve;
-    tx.onerror    = () => reject(tx.error);
+    tx.onerror = () => reject(tx.error);
   });
 }
 
-async function loadRppHandle() {
+async function loadRecentFolderHandle() {
   const db = await openDB();
+
   return new Promise((resolve, reject) => {
-    const tx  = db.transaction('handles', 'readonly');
-    const req = tx.objectStore('handles').get('rpp-dir');
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror   = () => reject(req.error);
+    const tx = db.transaction('handles', 'readonly');
+
+    const req = tx.objectStore('handles').get(
+      'recent-dir'
+    );
+
+    req.onsuccess = () => {
+      resolve(req.result || null);
+    };
+
+    req.onerror = () => reject(req.error);
   });
 }
 
 // ─── Folder bar helpers ───
-function showRppFolderBar(name) {
-  document.getElementById('rpp-folder-name').textContent = '📁 ' + name;
-  document.getElementById('rpp-folder-bar').classList.remove('hidden');
-  document.getElementById('rpp-pick-btn').classList.add('hidden');
+function showRecentFolderBar(name) {
+  document.getElementById('rpp-folder-name').textContent =
+    '📁 ' + name;
+
+  document.getElementById('rpp-folder-bar')
+    .classList.remove('hidden');
+
+  document.getElementById('rpp-pick-btn')
+    .classList.add('hidden');
 }
 
 // ─── Restore saved folder on load ───
-async function tryRestoreRppFolder() {
+async function tryRestoreRecentFolder() {
   try {
-    const handle = await loadRppHandle();
-    if (!handle) return;
-    const perm = await handle.queryPermission({ mode: 'read' });
+    const handle =
+      await loadRecentFolderHandle();
+
+    if (!handle) {
+      return;
+    }
+
+    const perm =
+      await handle.queryPermission({
+        mode: 'read'
+      });
+
     if (perm === 'granted') {
-      rppDirHandle = handle;
-      showRppFolderBar(handle.name);
-      await scanRppFiles();
+
+      recentDirHandle = handle;
+
+      showRecentFolderBar(
+        handle.name
+      );
+
+      await scanRecentFiles();
+
     } else {
-      // Needs user gesture to re-grant — show reconnect prompt on the pick button
-      const btn = document.getElementById('rpp-pick-btn');
-      btn.textContent = `🔄 Reconnect "${handle.name}"`;
-      btn.onclick = async () => {
-        const p = await handle.requestPermission({ mode: 'read' });
-        if (p === 'granted') {
-          rppDirHandle = handle;
-          btn.textContent = '📁 Pick Folder';
-          btn.onclick     = pickRppFolder;
-          showRppFolderBar(handle.name);
-          await scanRppFiles();
-        }
-      };
-      document.getElementById('rpp-list').innerHTML = `
+
+      const btn =
+        document.getElementById(
+          'rpp-pick-btn'
+        );
+
+      btn.textContent =
+        `🔄 Reconnect "${handle.name}"`;
+
+      btn.onclick =
+        async () => {
+
+          const p =
+            await handle.requestPermission({
+              mode: 'read'
+            });
+
+          if (p === 'granted') {
+
+            recentDirHandle = handle;
+
+            btn.textContent =
+              '📁 Pick Folder';
+
+            btn.onclick =
+              pickRecentFolder;
+
+            showRecentFolderBar(
+              handle.name
+            );
+
+            await scanRecentFiles();
+          }
+        };
+
+      document.getElementById(
+        'rpp-list'
+      ).innerHTML = `
         <div class="empty-state">
           <div class="icon">🔑</div>
-          Click Reconnect above<br>to re-access "${escHtml(handle.name)}".
-        </div>`;
+          Click Reconnect above<br>
+          to re-access
+          "${escHtml(handle.name)}".
+        </div>
+      `;
     }
+
   } catch (e) {
-    console.warn('[tryRestoreRppFolder]', e);
+    console.warn(
+      '[tryRestoreRecentFolder]',
+      e
+    );
   }
 }
 
 // ─── Change folder (from the bar's Change button) ───
-async function changeRppFolder() {
-  document.getElementById('rpp-folder-bar').classList.add('hidden');
-  document.getElementById('rpp-pick-btn').classList.remove('hidden');
-  document.getElementById('rpp-pick-btn').textContent = '📁 Pick Folder';
-  document.getElementById('rpp-pick-btn').onclick      = pickRppFolder;
-  await pickRppFolder();
+async function changeRecentFolder() {
+
+  document
+    .getElementById('rpp-folder-bar')
+    .classList.add('hidden');
+
+  document
+    .getElementById('rpp-pick-btn')
+    .classList.remove('hidden');
+
+  document
+    .getElementById('rpp-pick-btn')
+    .textContent =
+      '📁 Pick Folder';
+
+  document
+    .getElementById('rpp-pick-btn')
+    .onclick =
+      pickRecentFolder;
+
+  await pickRecentFolder();
 }
   
-async function pickRppFolder() {
+async function pickRecentFolder() {
   if (!window.showDirectoryPicker) {
-    alert('Your browser does not support the File System Access API.\nTry Chrome or Edge.');
+    alert(
+      'Folder access is not available in this browser.\n\n' +
+      'Use Chrome or Edge and open the dashboard from a secure context.'
+    );
     return;
   }
+
   try {
-    rppDirHandle = await window.showDirectoryPicker({ mode: 'read' });
-    await saveRppHandle(rppDirHandle);
-    showRppFolderBar(rppDirHandle.name);
-    await scanRppFiles();
+    recentDirHandle =
+      await window.showDirectoryPicker({
+        mode: 'read',
+        id: 'recent-files'
+      });
+
+    await saveRecentFolderHandle(
+      recentDirHandle
+    );
+
+    showRecentFolderBar(
+      recentDirHandle.name
+    );
+
+    await scanRecentFiles();
+
   } catch (e) {
+
     if (e.name !== 'AbortError') {
-      console.error('[pickRppFolder]', e);
-      renderRppError('Could not access the folder.');
+      console.error(
+        '[pickRecentFolder]',
+        e
+      );
+
+      renderRecentError(
+        'Could not access the folder.'
+      );
     }
   }
 }
 
-async function scanRppFiles() {
-  if (!rppDirHandle) { return; }
+async function scanRecentFiles() {
+  if (!recentDirHandle) {
+    return;
+  }
+
+  const mode = getRecentFileMode();
+  const extensions = getRecentExtensions();
+
   document.getElementById('rpp-list').innerHTML = `
     <div class="empty-state">
       <div class="icon">⋯</div>
       Scanning subfolders...
-    </div>`;
+    </div>
+  `;
+
   try {
     const files = [];
-    rppFileHandles = {};
-    await walkDir(rppDirHandle, '', files);
-    files.sort((a, b) => b.lastModified - a.lastModified);
-    renderRppFiles(files);
+
+    recentFileHandles = {};
+
+    await walkRecentDir(
+      recentDirHandle,
+      '',
+      files,
+      extensions
+    );
+
+    files.sort(
+      (a, b) =>
+        b.lastModified - a.lastModified
+    );
+
+    renderRecentFiles(files);
+
   } catch (e) {
-    console.error('[scanRppFiles]', e);
-    renderRppError('Scan failed. Try re-picking the folder.');
+
+    console.error(
+      '[scanRecentFiles]',
+      e
+    );
+
+    renderRecentError(
+      'Scan failed. Try re-picking the folder.'
+    );
   }
 }
 
-async function walkDir(dirHandle, path, results) {
-  for await (const [name, handle] of dirHandle.entries()) {
+async function walkRecentDir(
+  dirHandle,
+  path,
+  results,
+  extensions
+) {
+  for await (
+    const [name, handle]
+    of dirHandle.entries()
+  ) {
+
     if (handle.kind === 'directory') {
-      await walkDir(handle, path ? `${path}/${name}` : name, results);
-    } else if (handle.kind === 'file' && name.toLowerCase().endsWith('.rpp')) {
+
+      await walkRecentDir(
+        handle,
+        path
+          ? `${path}/${name}`
+          : name,
+        results,
+        extensions
+      );
+
+    } else if (
+      handle.kind === 'file'
+    ) {
+
+      const lowerName =
+        name.toLowerCase();
+
+      const supported =
+        extensions.some(
+          ext => lowerName.endsWith(ext)
+        );
+
+      if (!supported) {
+        continue;
+      }
+
       try {
-        const file     = await handle.getFile();
-        const fullPath = path ? `${path}/${name}` : name;
-        rppFileHandles[fullPath] = handle;
+
+        const file =
+          await handle.getFile();
+
+        const fullPath =
+          path
+            ? `${path}/${name}`
+            : name;
+
+        recentFileHandles[
+          fullPath
+        ] = handle;
+
         results.push({
           name,
-          path:         fullPath,
-          lastModified: file.lastModified,
-          rootFolder:   rppDirHandle.name,
+          path: fullPath,
+          lastModified:
+            file.lastModified,
+          rootFolder:
+            recentDirHandle.name,
+          extension:
+            lowerName.substring(
+              lowerName.lastIndexOf('.')
+            )
         });
-      } catch (_) { /* skip unreadable files */ }
+
+      } catch (_) {
+        // Ignore unreadable files
+      }
     }
   }
 }
 
-function renderRppFiles(files) {
-  const list = document.getElementById('rpp-list');
+  function getFileIcon(extension) {
+  const icons = {
+    '.rpp':  '🎵',
+    '.txt':  '📝',
+    '.doc':  '📄',
+    '.docx': '📄',
+    '.pdf':  '📕',
+    '.xls':  '📊',
+    '.xlsx': '📊',
+    '.csv':  '📊',
+    '.ppt':  '📑',
+    '.pptx': '📑',
+    '.md':   '📓',
+    '.rtf':  '📄',
+    '.odt':  '📄',
+    '.ods':  '📊',
+    '.odp':  '📑',
+    '.json': '{}',
+    '.xml':  '🗂️'
+  };
+
+  return icons[extension] || '📄';
+}
+  
+function renderRecentFiles(files) {
+
+  const list =
+    document.getElementById('rpp-list');
+
   if (!files.length) {
+
+    const mode =
+      getRecentFileMode();
+
+    let message =
+      'No supported files found';
+
+    if (mode === 'rpp') {
+      message =
+        'No .rpp files found';
+    }
+
+    if (mode === 'documents') {
+      message =
+        'No document files found';
+    }
+
     list.innerHTML = `
       <div class="empty-state">
-        <div class="icon">🎵</div>
-        No .rpp files found<br>in this folder or its subfolders.
-      </div>`;
-    return;
-  }
-  list.innerHTML = files.map((f, i) => {
-    const folderPart = f.path.includes('/')
-      ? f.path.substring(0, f.path.lastIndexOf('/'))
-      : '';
-    const displayPath = f.rootFolder + (folderPart ? '/' + folderPart : '');
-    return `
-      <div class="rpp-item" data-path="${escHtml(f.path)}" title="Double-click to open · ${escHtml(f.path)}">
-        <div class="rpp-name">${escHtml(f.name)}</div>
-        <div class="rpp-path">${escHtml(displayPath)}</div>
-        <div class="rpp-date">${formatRppDate(f.lastModified)}</div>
+        <div class="icon">📂</div>
+        ${message}<br>
+        in this folder or its subfolders.
       </div>
-      ${i < files.length - 1 ? '<div class="task-sep"></div>' : ''}
     `;
-  }).join('');
 
-  list.querySelectorAll('.rpp-item').forEach(item => {
-  item.addEventListener('click', () => {
-    openRppFile(item.dataset.path);
-  });
-});
-}
-
-function openRppFile(path) {
-  const root = localStorage.getItem(LS_KEYS.RPP_ROOT) || '';
-  if (!root) {
-    alert('Set your Root Folder Path in Settings (⚙) first.');
     return;
   }
-  const fullPath = root + '/' + path;
-  window.location.href = 'reaper:///' + fullPath.replace(/ /g, '%20');
+
+  list.innerHTML =
+    files.map((f, i) => {
+
+      const folderPart =
+        f.path.includes('/')
+          ? f.path.substring(
+              0,
+              f.path.lastIndexOf('/')
+            )
+          : '';
+
+      const displayPath =
+        f.rootFolder +
+        (
+          folderPart
+            ? '/' + folderPart
+            : ''
+        );
+
+      const icon =
+        getFileIcon(f.extension);
+
+      return `
+        <div
+          class="rpp-item"
+          data-path="${escHtml(f.path)}"
+          title="Open · ${escHtml(f.path)}"
+        >
+
+          <div
+            style="
+              display:flex;
+              align-items:center;
+              gap:8px;
+            "
+          >
+
+            <span style="font-size:20px;">
+              ${icon}
+            </span>
+
+            <div
+              class="rpp-name"
+              style="flex:1;"
+            >
+              ${escHtml(f.name)}
+            </div>
+
+          </div>
+
+          <div class="rpp-path">
+            ${escHtml(displayPath)}
+          </div>
+
+          <div class="rpp-date">
+            ${formatRppDate(f.lastModified)}
+          </div>
+
+        </div>
+
+        ${
+          i < files.length - 1
+            ? '<div class="task-sep"></div>'
+            : ''
+        }
+      `;
+
+    }).join('');
+
+  list
+    .querySelectorAll('.rpp-item')
+    .forEach(item => {
+
+      item.addEventListener(
+        'click',
+        () => {
+          openRecentFile(
+            item.dataset.path
+          );
+        }
+      );
+
+    });
 }
 
-function renderRppError(msg) {
-  document.getElementById('rpp-list').innerHTML = `
+  function renderRecentError(message) {
+  const list =
+    document.getElementById('rpp-list');
+
+  list.innerHTML = `
     <div class="empty-state">
-      <div class="icon">✗</div>
-      ${escHtml(msg)}
-    </div>`;
+      <div class="icon">⚠️</div>
+      ${escHtml(message)}
+    </div>
+  `;
+}
+  
+function openRecentFile(path) {
+
+  const root =
+    localStorage.getItem(
+      LS_KEYS.RPP_ROOT
+    ) || '';
+
+  if (!root) {
+    alert(
+      'Set your Recent Files Folder in Settings (⚙) first.'
+    );
+
+    return;
+  }
+
+  const fullPath =
+    root + '/' + path;
+
+  const extension =
+    path
+      .toLowerCase()
+      .substring(
+        path.lastIndexOf('.')
+      );
+
+  // REAPER projects
+  if (extension === '.rpp') {
+
+    const reaperUrl =
+      'reaper:///' +
+      encodeURIComponent(
+        fullPath
+      );
+
+    window.location.href =
+      reaperUrl;
+
+    return;
+  }
+
+  // Other files
+  alert(
+    'The browser cannot directly open arbitrary Windows files by filesystem path.\n\n' +
+    'A local helper application would be needed for direct opening of documents.'
+  );
 }
 
 function formatRppDate(ts) {
