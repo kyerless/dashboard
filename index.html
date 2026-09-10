@@ -2582,30 +2582,65 @@ async function openRecentFile(path) {
     //
     //   explorer.exe /select,"FULL_PATH"
     //
+    // ─────────────────────────────────────────
+    // WINDOWS / OFFICE FILES
+    // ─────────────────────────────────────────
+    
     const root =
       localStorage.getItem(
         LS_KEYS.RPP_ROOT
       ) || '';
-
+    
     if (!root) {
       alert(
         'Set your Recent Files Folder in Settings (⚙) first.\n\n' +
-        'This path is used to open Windows files in File Explorer.'
+        'This path is required so Windows can open the selected file.'
       );
-
+    
       return;
     }
-
+    
     const fullPath =
       root + '/' + path;
-
+    
+    // Decide how Windows should open the file.
+    let mode = 'select';
+    
+    switch (extension) {
+    
+      // Microsoft Word
+      case '.doc':
+      case '.docx':
+        mode = 'word';
+        break;
+    
+      // Microsoft Excel
+      case '.xls':
+      case '.xlsx':
+        mode = 'excel';
+        break;
+    
+      // Microsoft PowerPoint
+      case '.ppt':
+      case '.pptx':
+        mode = 'powerpoint';
+        break;
+    
+      // Everything else:
+      // keep the old File Explorer behavior.
+      default:
+        mode = 'select';
+        break;
+    }
+    
     const helperUrl =
       'dashboard://open?path=' +
-      encodeURIComponent(fullPath);
-
+      encodeURIComponent(fullPath) +
+      '&mode=' +
+      encodeURIComponent(mode);
+    
     window.location.href =
       helperUrl;
-
   } catch (e) {
 
     console.error(
